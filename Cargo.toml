@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "hshchk-lib",
+    "hshchk-cli",
+]

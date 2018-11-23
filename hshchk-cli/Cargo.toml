@@ -1,0 +1,9 @@
+[package]
+name = "hshchk-cli"
+version = "0.1.0"
+authors = ["mac"]
+edition = "2018"
+
+[dependencies]
+hshchk-lib = { path = "../hshchk-lib" }
+cancellation = "0.1"
