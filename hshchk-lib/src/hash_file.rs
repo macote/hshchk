@@ -11,22 +11,18 @@ pub struct FileEntry {
 }
 
 pub struct HashFile {
-    hash_file_path: String,
     files: HashMap<String, FileEntry>,
 }
 
 impl HashFile {
-    pub fn new (hash_file_path: String) -> Self {
-        let mut hash_file = HashFile {
-            hash_file_path: hash_file_path,
+    pub fn new () -> Self {
+        HashFile {
             files: HashMap::new(),
-        };
-        hash_file.load();
-        hash_file
+        }
     }
 
-    pub fn load(&mut self) {
-        let file = open_file(&self.hash_file_path);
+    pub fn load(&mut self, file_path: &str) {
+        let file = open_file(file_path);
         let reader = BufReader::new(file);
         for (_, line) in reader.lines().enumerate() {
             let content = line.unwrap();
@@ -79,5 +75,9 @@ impl HashFile {
 
     pub fn get_file_paths(&self) -> Vec<String> {
         self.files.iter().map(|(key, _)| key.clone()).collect()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
     }
 }
