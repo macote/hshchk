@@ -18,27 +18,26 @@ fn main() {
         None => false,
     };
     
+    let cts = CancellationTokenSource::new();
     if args.len() == 1 {
         let mut hash_file = HashFile::new();
         hash_file.load(&args[1]);
         hash_file.save("/home/mac/Temp/hc.test");
     } else if args.len() == 2 {
-        let cts = CancellationTokenSource::new();
         let mut file_hasher = hshchk_lib::get_sha1_file_hasher(&args[1]);
         file_hasher.set_bytes_processed_event_handler(
             Box::new(|args| println!("processed {} bytes", args.bytes_processed)));
         file_hasher.compute(&cts);
         println!("SHA-1: {}", file_hasher.digest());
     } else if args.len() == 3 {
-        let hfp = HashFileProcessor::new(
+        let mut hfp = HashFileProcessor::new(
             HashFileProcessType::Create,
-            HashType::SHA256,
-            "hash_file_name",
-            "app_file_name",
-            &args[1],
-            None
+            HashType::SHA1,
+            "checksum.sha1",
+            "hshchk",
+            &args[1]
         );
-        hfp.process();
+        hfp.process(&cts);
     } else {
         println!("usage: hshchk [path]");
     }
