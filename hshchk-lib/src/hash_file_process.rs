@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::{MAIN_SEPARATOR, PathBuf};
 
 use cancellation::{CancellationTokenSource};
 
@@ -55,7 +55,7 @@ impl<'a> HashFileProcessor<'a> {
 		app_file_name: &'a str,
 		base_path: &str) -> Self {
 		let base_path_normalized: &str;
-		if base_path.ends_with(r"\") {
+		if base_path.ends_with(MAIN_SEPARATOR) {
 			base_path_normalized = &base_path[..base_path.len() - 1];
 		}
 		else if base_path.is_empty() {
