@@ -3,6 +3,7 @@ use std::path::{MAIN_SEPARATOR, PathBuf};
 
 use cancellation::{CancellationTokenSource};
 
+use crate::block_hasher::{BlockHasher};
 use crate::{HashType};
 use crate::file_tree::{FileTree, FileTreeProcessor};
 use crate::hash_file::{HashFile};
@@ -14,7 +15,7 @@ pub enum HashFileProcessType {
 	Undefined,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum HashFileProcessResult {
 	FilesAreMissing,
 	CouldNotOpenHashFile,
@@ -23,6 +24,19 @@ pub enum HashFileProcessResult {
 	Success,
 	Canceled,
 	UnsupportedProcessType,
+}
+
+pub enum FileState {
+	Unknown,
+	Missing,
+	IncorrectSize,
+	IncorrectHash,
+	Error(String),
+}
+
+pub struct ReportEntry {
+	file_path: String,
+	state: FileState,
 }
 
 pub struct HashFileProcessorProgressEventArgs {
@@ -43,6 +57,7 @@ pub struct HashFileProcessor<'a> {
 	progress_event: Option<Box<Fn(HashFileProcessorProgressEventArgs)>>,
     bytes_processed_notification_block_size: usize,
 	complete_event: Option<Box<Fn()>>,
+	report: Vec<ReportEntry>,
 }
 
 const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2097152;
@@ -76,6 +91,7 @@ impl<'a> HashFileProcessor<'a> {
 			progress_event: None,
 			bytes_processed_notification_block_size: DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
 			complete_event: None,
+			report: Vec::new(),
 		}
 	}
 	pub fn process(&mut self, cancellation_token: &'a CancellationTokenSource) -> HashFileProcessResult {
@@ -102,8 +118,23 @@ impl<'a> HashFileProcessor<'a> {
 			if self.hash_file.is_empty() {
 				result = HashFileProcessResult::NoFileToProcess;
 			}
+			else if !self.report.is_empty() {
+				result = HashFileProcessResult::ErrorsOccurredWhileProcessing;
+			}
 			else {
 				self.hash_file.save(&self.hash_file_name);
+			}
+		}
+		else if self.hash_file_process_type == HashFileProcessType::Verify {
+			if !self.hash_file.is_empty() {
+				for file_path in self.hash_file.get_file_paths() {
+					self.report.push(ReportEntry {
+						file_path, state: FileState::Missing
+					});
+				}
+			}
+			else if !self.report.is_empty() {
+				result = HashFileProcessResult::ErrorsOccurredWhileProcessing;
 			}
 		}
 
@@ -140,33 +171,57 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 
 		let file_path_str = file_path.to_str().unwrap();
 		let relative_file_path = &file_path_str[(self.base_path_len + 1)..];
-		let some_file_entry = self.hash_file.get_entry(relative_file_path);
-		match some_file_entry {
-			None => {
-				if self.hash_file_process_type == HashFileProcessType::Verify {
-					// report_.AddLine(L"Unknown             : " + relativefilepath);
-					()
-				}
+		let file_size = file_path.metadata().unwrap().len();
+		let hash_file_entry = self.hash_file.get_entry(relative_file_path);
+		if let Some(file_entry) = hash_file_entry {
+			if file_size != file_entry.size {
+				self.report.push(ReportEntry {
+					file_path: relative_file_path.to_string(), state: FileState::IncorrectSize
+				});
 			}
-			Some(file_entry) =>  {
-
+		}
+		else {
+			if self.hash_file_process_type == HashFileProcessType::Verify {
+				self.report.push(ReportEntry {
+					file_path: relative_file_path.to_string(), state: FileState::Unknown
+				});
+				()
 			}
 		}
 
-		// get file size
+        let mut file_hasher = crate::get_sha1_file_hasher(file_path_str);
 
-		// check file size
+		if let Some(handler) = &self.progress_event {
+			let file_path = relative_file_path.to_string();
+			handler(HashFileProcessorProgressEventArgs {
+				relative_file_path: file_path,
+				file_size,
+				bytes_processed: 0,
+			});
+			file_hasher.set_bytes_processed_event_handler(
+				Box::new(|args| {
+					// handler(HashFileProcessorProgressEventArgs {
+					// 	relative_file_path: file_path,
+					// 	file_size,
+					// 	bytes_processed: args.bytes_processed,
+					// });
+				}));
+		}
 
-		// create file hasher
-
-		// compute file hash
+        file_hasher.compute(&self.cancellation_token.unwrap());
 
 		if self.hash_file_process_type == HashFileProcessType::Create {
-			self.hash_file.add_entry(relative_file_path, 0, "ABCDEF");
+			self.hash_file.add_entry(relative_file_path, file_size, &file_hasher.digest());
 		} else if self.hash_file_process_type == HashFileProcessType::Verify {
+			if let Some(file_entry) = hash_file_entry {
+				if file_hasher.digest() != file_entry.digest {
+					self.report.push(ReportEntry {
+						file_path: relative_file_path.to_string(), state: FileState::IncorrectHash
+					});
+				}
+			}
+			
 			self.hash_file.remove_entry(relative_file_path);
 		}
-
-		println!("entry: {}; relative: {}", file_path.display(), relative_file_path);
 	}
 }

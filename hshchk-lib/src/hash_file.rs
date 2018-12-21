@@ -5,9 +5,9 @@ use std::io::{BufReader, BufWriter, prelude::*};
 use crate::{open_file, create_file};
 
 pub struct FileEntry {
-    file_path: String,
-    size: u64,
-    digest: String,
+    pub file_path: String,
+    pub size: u64,
+    pub digest: String,
 }
 
 pub struct HashFile {

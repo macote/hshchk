@@ -37,7 +37,18 @@ fn main() {
             "hshchk",
             &args[1]
         );
-        hfp.process(&cts);
+        let result = hfp.process(&cts);
+        println!("create result: {:?}", result);
+    } else if args.len() == 4 {
+        let mut hfp = HashFileProcessor::new(
+            HashFileProcessType::Verify,
+            HashType::SHA1,
+            "checksum.sha1",
+            "hshchk",
+            &args[1]
+        );
+        let result = hfp.process(&cts);
+        println!("verify result: {:?}", result);
     } else {
         println!("usage: hshchk [path]");
     }
