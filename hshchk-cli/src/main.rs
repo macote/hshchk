@@ -1,9 +1,10 @@
 use std::env;
+use std::path::Path;
 
 use cancellation::{CancellationTokenSource};
 
 use hshchk_lib::{
-    HashType, block_hasher::{BlockHasher}, hash_file::{HashFile},
+    HashType, hash_file::HashFile,
     hash_file_process::{HashFileProcessor, HashFileProcessType}
 };
 
@@ -18,13 +19,16 @@ fn main() {
         None => false,
     };
     
+    let app_file_path = Path::new(&args[0]);
+    let app_file_name = app_file_path.file_name().unwrap().to_str().unwrap();
     let cts = CancellationTokenSource::new();
+
     if args.len() == 1 {
         let mut hash_file = HashFile::new();
         hash_file.load(&args[1]);
         hash_file.save("/home/mac/Temp/hc.test");
     } else if args.len() == 2 {
-        let mut file_hasher = hshchk_lib::get_sha1_file_hasher(&args[1]);
+        let mut file_hasher = hshchk_lib::get_file_hasher(HashType::SHA1, &args[1]);
         file_hasher.set_bytes_processed_event_handler(
             Box::new(|args| println!("processed {} bytes", args.bytes_processed)));
         file_hasher.compute(&cts);
@@ -34,7 +38,7 @@ fn main() {
             HashFileProcessType::Create,
             HashType::SHA1,
             "checksum.sha1",
-            "hshchk",
+            &app_file_name,
             &args[1]
         );
         let result = hfp.process(&cts);
@@ -44,7 +48,7 @@ fn main() {
             HashFileProcessType::Verify,
             HashType::SHA1,
             "checksum.sha1",
-            "hshchk",
+            &app_file_name,
             &args[1]
         );
         let result = hfp.process(&cts);

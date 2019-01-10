@@ -3,16 +3,14 @@ use std::path::{MAIN_SEPARATOR, PathBuf};
 
 use cancellation::{CancellationTokenSource};
 
-use crate::block_hasher::{BlockHasher};
-use crate::{HashType};
+use crate::HashType;
 use crate::file_tree::{FileTree, FileTreeProcessor};
-use crate::hash_file::{HashFile};
+use crate::hash_file::HashFile;
 
 #[derive(PartialEq)]
 pub enum HashFileProcessType {
 	Create,
 	Verify,
-	Undefined,
 }
 
 #[derive(Debug, PartialEq)]
@@ -49,8 +47,8 @@ pub struct HashFileProcessor<'a> {
 	hash_file: HashFile,
 	hash_type: HashType,
 	hash_file_process_type: HashFileProcessType,
-	hash_file_name: &'a str,
-	app_file_name: &'a str,
+	hash_file_name: String,
+	app_file_name: String,
 	base_path: PathBuf,
 	base_path_len: usize,
 	cancellation_token: Option<&'a CancellationTokenSource>,
@@ -66,8 +64,8 @@ impl<'a> HashFileProcessor<'a> {
 	pub fn new(
 		hash_file_process_type: HashFileProcessType,
 		hash_type: HashType,
-		hash_file_name: &'a str,
-		app_file_name: &'a str,
+		hash_file_name: &str,
+		app_file_name: &str,
 		base_path: &str) -> Self {
 		let base_path_normalized: &str;
 		if base_path.ends_with(MAIN_SEPARATOR) {
@@ -83,8 +81,8 @@ impl<'a> HashFileProcessor<'a> {
 			hash_file: HashFile::new(),
 			hash_type,
 			hash_file_process_type,
-			hash_file_name: hash_file_name,
-			app_file_name: app_file_name,
+			hash_file_name: format!("{}{}{}", ".", MAIN_SEPARATOR, hash_file_name),
+			app_file_name: format!("{}{}{}", ".", MAIN_SEPARATOR, app_file_name),
 			base_path: PathBuf::from(base_path_normalized),
 			base_path_len: base_path_normalized.len(),
 			cancellation_token: None,
@@ -140,12 +138,12 @@ impl<'a> HashFileProcessor<'a> {
 
 		result
 	}
-	fn cancel_process(&self) {
+	pub fn cancel_process(&self) {
 		if let Some(token) = self.cancellation_token {
 			token.cancel();
 		}
 	}
-	fn save_report(&self) {
+	pub fn save_report(&self) {
 
 	}
     pub fn set_progress_event_handler(&mut self, handler: Box<Fn(HashFileProcessorProgressEventArgs)>) {
@@ -167,9 +165,11 @@ impl<'a> HashFileProcessor<'a> {
 
 impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 	fn process_file(&mut self, file_path: &PathBuf) {
-		// TODO: skip self and current hash file
-
 		let file_path_str = file_path.to_str().unwrap();
+		if file_path_str == self.app_file_name || file_path_str == self.hash_file_name {
+			return // skip app file and current hash file
+		}
+
 		let relative_file_path = &file_path_str[(self.base_path_len + 1)..];
 		let file_size = file_path.metadata().unwrap().len();
 		let hash_file_entry = self.hash_file.get_entry(relative_file_path);
@@ -185,11 +185,11 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 				self.report.push(ReportEntry {
 					file_path: relative_file_path.to_string(), state: FileState::Unknown
 				});
-				()
+				return
 			}
 		}
 
-        let mut file_hasher = crate::get_sha1_file_hasher(file_path_str);
+        let mut file_hasher = crate::get_file_hasher(self.hash_type, file_path_str);
 
 		if let Some(handler) = &self.progress_event {
 			let file_path = relative_file_path.to_string();
@@ -200,6 +200,7 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 			});
 			file_hasher.set_bytes_processed_event_handler(
 				Box::new(|args| {
+					// TODO: fix this. use Rc<> (or Arc<>?) instead of Box<>.
 					// handler(HashFileProcessorProgressEventArgs {
 					// 	relative_file_path: file_path,
 					// 	file_size,

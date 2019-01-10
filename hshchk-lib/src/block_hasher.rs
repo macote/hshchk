@@ -4,10 +4,14 @@ pub struct BytesProcessedEventArgs {
 	pub bytes_processed: usize,
 }
 
-pub trait BlockHasher<T> {
+pub trait BlockHasher {
     fn read(&mut self) -> usize;
     fn update(&mut self, byte_count: usize);
-    fn digest(self) -> String;
+    fn digest(&mut self) -> String;
+    fn set_bytes_processed_event_handler(&mut self, handler: Box<Fn(BytesProcessedEventArgs)>);
+    fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(&mut self, 
+        handler: Box<Fn(BytesProcessedEventArgs)>,
+        bytes_processed_notification_block_size: usize);
     fn bytes_processed_notification_block_size(&self) -> usize;
     fn is_bytes_processed_event_handler_defined(&self) -> bool;
     fn handle_bytes_processed_event(&self, args: BytesProcessedEventArgs);

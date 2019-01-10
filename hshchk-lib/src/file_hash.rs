@@ -31,21 +31,9 @@ impl<T: Digest> FileHash<T> {
     pub fn new(file_path: &str) -> Self {
         FileHash::new_with_buffer_size(file_path, DEFAULT_BUFFER_SIZE)
     }
-    pub fn set_bytes_processed_event_handler(&mut self, handler: Box<Fn(BytesProcessedEventArgs)>) {
-        self.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
-            handler, 
-            DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE
-        )
-    }
-    pub fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(&mut self, 
-        handler: Box<Fn(BytesProcessedEventArgs)>,
-        bytes_processed_notification_block_size: usize) {
-        self.bytes_processed_event = Some(handler);
-        self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
-    }
 }
 
-impl<T: Digest> BlockHasher<T> for FileHash<T> {
+impl<T: Digest> BlockHasher for FileHash<T> {
     fn read(&mut self) -> usize {
         let mut adaptor = (&mut self.reader).take(self.buffer_size as u64);
         adaptor.read_to_end(&mut self.buffer).unwrap()
@@ -53,8 +41,20 @@ impl<T: Digest> BlockHasher<T> for FileHash<T> {
     fn update(&mut self, byte_count: usize) {
         self.hasher.input(&self.buffer[..byte_count]);
     }
-    fn digest(self) -> String {
-        hex::encode(self.hasher.result())
+    fn digest(&mut self) -> String {
+        hex::encode(self.hasher.result_reset())
+    }
+    fn set_bytes_processed_event_handler(&mut self, handler: Box<Fn(BytesProcessedEventArgs)>) {
+        self.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
+            handler, 
+            DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE
+        )
+    }
+    fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(&mut self, 
+        handler: Box<Fn(BytesProcessedEventArgs)>,
+        bytes_processed_notification_block_size: usize) {
+        self.bytes_processed_event = Some(handler);
+        self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
     }
     fn is_bytes_processed_event_handler_defined(&self) -> bool {
         self.bytes_processed_event.is_some()
