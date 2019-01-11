@@ -41,6 +41,8 @@ fn main() {
             &app_file_name,
             &args[1]
         );
+        hfp.set_progress_event_handler(
+            Box::new(|args| println!("processing {}", args.relative_file_path)));
         let result = hfp.process(&cts);
         println!("create result: {:?}", result);
     } else if args.len() == 4 {
@@ -51,6 +53,8 @@ fn main() {
             &app_file_name,
             &args[1]
         );
+        hfp.set_progress_event_handler(
+            Box::new(|args| println!("processing {}", args.relative_file_path)));
         let result = hfp.process(&cts);
         println!("verify result: {:?}", result);
     } else {

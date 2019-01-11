@@ -33,14 +33,14 @@ pub enum FileState {
 }
 
 pub struct ReportEntry {
-	file_path: String,
-	state: FileState,
+	pub file_path: String,
+	pub state: FileState,
 }
 
 pub struct HashFileProcessorProgressEventArgs {
-	relative_file_path: String,
-	file_size: u64,
-	bytes_processed: usize,
+	pub relative_file_path: String,
+	pub file_size: u64,
+	pub bytes_processed: usize,
 }
 
 pub struct HashFileProcessor<'a> {
@@ -199,7 +199,7 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 				bytes_processed: 0,
 			});
 			file_hasher.set_bytes_processed_event_handler(
-				Box::new(|args| {
+				Box::new(|_args| {
 					// TODO: fix this. use Rc<> (or Arc<>?) instead of Box<>.
 					// handler(HashFileProcessorProgressEventArgs {
 					// 	relative_file_path: file_path,
