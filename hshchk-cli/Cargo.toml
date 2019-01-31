@@ -1,9 +1,21 @@
 [package]
-name = "hshchk-cli"
+name = "hshchk"
+description = "A command-line file tree hash checker"
+authors = ["Marc-André Côté <mac@live.ca>"]
+categories = ["command-line-utilities"]
 version = "0.1.0"
-authors = ["mac"]
+repository = "https://github.com/macote/hshchk"
+readme = "README.md"
+license = "MIT/Apache-2.0"
 edition = "2018"
 
 [dependencies]
 hshchk-lib = { path = "../hshchk-lib" }
 cancellation = "0.1"
+ansi_term = "0.11"
+atty = "0.2"
+ctrlc = "3.1"
+
+[dependencies.clap]
+version = "2"
+features = ["suggestions", "color", "wrap_help"]

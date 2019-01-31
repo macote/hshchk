@@ -1,4 +1,4 @@
-use cancellation::CancellationTokenSource;
+use cancellation::CancellationToken;
 
 pub struct BytesProcessedEventArgs {
 	pub bytes_processed: usize,
@@ -15,7 +15,7 @@ pub trait BlockHasher {
     fn bytes_processed_notification_block_size(&self) -> usize;
     fn is_bytes_processed_event_handler_defined(&self) -> bool;
     fn handle_bytes_processed_event(&self, args: BytesProcessedEventArgs);
-    fn compute(&mut self, cancellation_token: &CancellationTokenSource) {
+    fn compute(&mut self, cancellation_token: &CancellationToken) {
         let mut bytes_read;
         let mut running_notification_block_size = 0usize;
         let mut bytes_processed = 0usize;

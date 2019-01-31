@@ -15,14 +15,13 @@ pub mod file_tree;
 pub mod hash_file;
 pub mod hash_file_process;
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum HashType {
 	SHA1,
 	SHA256,
 	SHA512,
     BLAKE2B,
     BLAKE2S,
-	Undefined
 }
 
 fn open_file(file_path: &str) -> File {
@@ -74,7 +73,6 @@ pub fn get_file_hasher(hash_type: HashType, file_path: &str) -> Box<BlockHasher>
         HashType::SHA512 => Box::new(get_sha512_file_hasher(file_path)),
         HashType::BLAKE2B => Box::new(get_blake2b_file_hasher(file_path)),
         HashType::BLAKE2S => Box::new(get_blake2s_file_hasher(file_path)),
-        _ => panic!("The specified hash type is not supported.")
     }
 }
 

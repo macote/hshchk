@@ -1,13 +1,13 @@
 use std::error::Error;
 use std::path::{MAIN_SEPARATOR, PathBuf};
 
-use cancellation::{CancellationTokenSource};
+use cancellation::{CancellationToken};
 
 use crate::HashType;
 use crate::file_tree::{FileTree, FileTreeProcessor};
 use crate::hash_file::HashFile;
 
-#[derive(PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum HashFileProcessType {
 	Create,
 	Verify,
@@ -21,7 +21,6 @@ pub enum HashFileProcessResult {
 	NoFileToProcess,
 	Success,
 	Canceled,
-	UnsupportedProcessType,
 }
 
 pub enum FileState {
@@ -51,7 +50,7 @@ pub struct HashFileProcessor<'a> {
 	app_file_name: String,
 	base_path: PathBuf,
 	base_path_len: usize,
-	cancellation_token: Option<&'a CancellationTokenSource>,
+	cancellation_token: Option<&'a CancellationToken>,
 	progress_event: Option<Box<Fn(HashFileProcessorProgressEventArgs)>>,
     bytes_processed_notification_block_size: usize,
 	complete_event: Option<Box<Fn()>>,
@@ -92,36 +91,36 @@ impl<'a> HashFileProcessor<'a> {
 			report: Vec::new(),
 		}
 	}
-	pub fn process(&mut self, cancellation_token: &'a CancellationTokenSource) -> HashFileProcessResult {
+	pub fn process(&mut self, cancellation_token: &'a CancellationToken) -> HashFileProcessResult {
 		self.cancellation_token = Some(cancellation_token);
-		let mut result = HashFileProcessResult::Success;
 
 		if self.hash_file_process_type == HashFileProcessType::Verify {
 			self.hash_file.load(&self.hash_file_name);
 		}
-		else if self.hash_file_process_type != HashFileProcessType::Create {
-			result = HashFileProcessResult::UnsupportedProcessType;
-		}
 
 		let path = self.base_path.clone();
 		let mut file_tree = FileTree::new(self);
-		match file_tree.traverse(&path) {
+		match file_tree.traverse(&path, cancellation_token) {
 			Err(why) => panic!("couldn't traverse {}: {}", 
 				path.display(),
 				why.description()),
-			Ok(file) => file
+			Ok(_) => ()
+		}
+
+		if cancellation_token.is_canceled() {
+			return HashFileProcessResult::Canceled;
 		}
 
 		if self.hash_file_process_type == HashFileProcessType::Create {
 			if self.hash_file.is_empty() {
-				result = HashFileProcessResult::NoFileToProcess;
+				return HashFileProcessResult::NoFileToProcess;
 			}
-			else if !self.report.is_empty() {
-				result = HashFileProcessResult::ErrorsOccurredWhileProcessing;
+
+			if !self.report.is_empty() {
+				return HashFileProcessResult::ErrorsOccurredWhileProcessing;
 			}
-			else {
-				self.hash_file.save(&self.hash_file_name);
-			}
+
+			self.hash_file.save(&self.hash_file_name);
 		}
 		else if self.hash_file_process_type == HashFileProcessType::Verify {
 			if !self.hash_file.is_empty() {
@@ -132,19 +131,13 @@ impl<'a> HashFileProcessor<'a> {
 				}
 			}
 			else if !self.report.is_empty() {
-				result = HashFileProcessResult::ErrorsOccurredWhileProcessing;
+				return HashFileProcessResult::ErrorsOccurredWhileProcessing;
 			}
 		}
 
-		result
-	}
-	pub fn cancel_process(&self) {
-		if let Some(token) = self.cancellation_token {
-			token.cancel();
-		}
+		HashFileProcessResult::Success
 	}
 	pub fn save_report(&self) {
-
 	}
     pub fn set_progress_event_handler(&mut self, handler: Box<Fn(HashFileProcessorProgressEventArgs)>) {
         self.set_progress_event_handler_with_bytes_processed_notification_block_size(
@@ -167,7 +160,7 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 	fn process_file(&mut self, file_path: &PathBuf) {
 		let file_path_str = file_path.to_str().unwrap();
 		if file_path_str == self.app_file_name || file_path_str == self.hash_file_name {
-			return // skip app file and current hash file
+			return; // skip app file and current hash file
 		}
 
 		let relative_file_path = &file_path_str[(self.base_path_len + 1)..];
@@ -185,7 +178,7 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 				self.report.push(ReportEntry {
 					file_path: relative_file_path.to_string(), state: FileState::Unknown
 				});
-				return
+				return;
 			}
 		}
 
@@ -209,7 +202,12 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 				}));
 		}
 
-        file_hasher.compute(&self.cancellation_token.unwrap());
+		let cancellation_token = &self.cancellation_token.unwrap();
+        file_hasher.compute(cancellation_token);
+
+		if cancellation_token.is_canceled() {
+			return;
+		}
 
 		if self.hash_file_process_type == HashFileProcessType::Create {
 			self.hash_file.add_entry(relative_file_path, file_size, &file_hasher.digest());
