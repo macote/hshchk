@@ -6,6 +6,9 @@ use sha1::{Sha1};
 use sha2::{Sha256, Sha512};
 use blake2::{Blake2b, Blake2s};
 
+use strum::IntoEnumIterator;
+use strum_macros::{IntoStaticStr, EnumIter, EnumString};
+
 use crate::file_hash::FileHash;
 use crate::block_hasher::BlockHasher;
 
@@ -15,7 +18,7 @@ pub mod file_tree;
 pub mod hash_file;
 pub mod hash_file_process;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, EnumString, EnumIter, IntoStaticStr)]
 pub enum HashType {
 	SHA1,
 	SHA256,
@@ -74,6 +77,19 @@ pub fn get_file_hasher(hash_type: HashType, file_path: &str) -> Box<BlockHasher>
         HashType::BLAKE2B => Box::new(get_blake2b_file_hasher(file_path)),
         HashType::BLAKE2S => Box::new(get_blake2s_file_hasher(file_path)),
     }
+}
+
+pub fn get_hash_types() -> Vec<&'static str> {
+    let mut types: Vec<&'static str> = Vec::new();
+    for hash_type in HashType::iter() {
+        types.push(hash_type.into());
+    }
+
+    types
+}
+
+pub fn get_hash_type_from_str(type_str: &str) -> HashType {
+    type_str.parse().unwrap()
 }
 
 #[cfg(test)]

@@ -3,36 +3,12 @@ use std::path::{Path, PathBuf};
 use std::io::{Error, ErrorKind};
 
 use clap::{
-    App, AppSettings, Arg, arg_enum, crate_name, crate_description, crate_version, _clap_count_exprs
+    App, AppSettings, Arg, crate_name, crate_description, crate_version
 };
 
 use cancellation::{CancellationTokenSource};
 
-use hshchk_lib::{
-    HashType, hash_file_process::{HashFileProcessor, HashFileProcessType}
-};
-
-arg_enum! {
-    #[derive(PartialEq, Debug)]
-    enum HashTypeArgument {
-        SHA1,
-        SHA256,
-        SHA512,
-        BLAKE2B,
-        BLAKE2S,
-    } 
-}
-
-fn hash_type_from_arg(hash_type_arg: &str) -> HashType {
-    match hash_type_arg {
-        "sha1" => HashType::SHA1,
-        "sha256" => HashType::SHA256,
-        "sha512" => HashType::SHA512,
-        "blake2b" => HashType::BLAKE2B,
-        "blake2s" => HashType::BLAKE2S,
-        _ => panic!("Unsupported hash type.")
-    }
-}
+use hshchk_lib::hash_file_process::{HashFileProcessor, HashFileProcessType};
 
 fn run(bin_file_name: &str) -> Result<(), Box<::std::error::Error>> {
     let app = App::new(crate_name!())
@@ -52,13 +28,13 @@ fn run(bin_file_name: &str) -> Result<(), Box<::std::error::Error>> {
             .long("hashtype")
             .takes_value(true)
             .value_name("type")
-            .possible_values(&HashTypeArgument::variants())
+            .possible_values(&hshchk_lib::get_hash_types())
             .case_insensitive(true)
-            .help("Hash function type."))
+            .help("Hash function type"))
         .arg(Arg::with_name("create")
             .short("c")
             .long("create")
-            .help("Force create mode and overwrite checksum file if it exists."));
+            .help("Force create mode and overwrite checksum file if it exists"));
 
     let matches = app.get_matches_safe()?;
 
@@ -78,9 +54,9 @@ fn run(bin_file_name: &str) -> Result<(), Box<::std::error::Error>> {
 
     ctrlc::set_handler(move || { cts.cancel(); }).expect("Error setting Ctrl-C handler");
 
-    let hash_type_arg = matches.value_of("hashtype").unwrap_or("SHA1").to_lowercase();
-    let hash_type = hash_type_from_arg(&hash_type_arg);
-    let hash_file_name = format!("checksum.{}", hash_type_arg);
+    let hash_type_arg = matches.value_of("hashtype").unwrap_or("SHA1").to_uppercase();
+    let hash_type = hshchk_lib::get_hash_type_from_str(&hash_type_arg);
+    let hash_file_name = format!("checksum.{}", hash_type_arg.to_lowercase());
 
     let mut process_type = HashFileProcessType::Create;
 

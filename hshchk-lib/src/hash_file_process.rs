@@ -7,6 +7,8 @@ use crate::HashType;
 use crate::file_tree::{FileTree, FileTreeProcessor};
 use crate::hash_file::HashFile;
 
+static CHECKSUM_FILE_FORMAT: &str = "checksum.{}";
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum HashFileProcessType {
 	Create,
