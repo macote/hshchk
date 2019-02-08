@@ -1,5 +1,5 @@
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::io::{Error, ErrorKind};
 
 use clap::{
@@ -8,9 +8,9 @@ use clap::{
 
 use cancellation::{CancellationTokenSource};
 
-use hshchk_lib::hash_file_process::{HashFileProcessor, HashFileProcessType};
+use hshchk_lib::hash_file_process::HashFileProcessor;
 
-fn run(bin_file_name: &str) -> Result<(), Box<::std::error::Error>> {
+fn run(bin_path: &str) -> Result<(), Box<::std::error::Error>> {
     let app = App::new(crate_name!())
         .setting(AppSettings::ColorAuto)
         .setting(AppSettings::ColoredHelp)
@@ -48,30 +48,18 @@ fn run(bin_file_name: &str) -> Result<(), Box<::std::error::Error>> {
         return Err(Box::new(Error::new(ErrorKind::Other, "The specified directory doesn't exist.")));
     }
 
+    let hash_type_arg = matches.value_of("hashtype").unwrap_or("SHA1").to_uppercase();
+    let hash_type = hshchk_lib::get_hash_type_from_str(&hash_type_arg);
+    let force_create = matches.is_present("create");
+
     let cts = CancellationTokenSource::new();
     let cancellation_token = cts.token();
     let processor_cancellation_token = cancellation_token.clone();
 
     ctrlc::set_handler(move || { cts.cancel(); }).expect("Error setting Ctrl-C handler");
 
-    let hash_type_arg = matches.value_of("hashtype").unwrap_or("SHA1").to_uppercase();
-    let hash_type = hshchk_lib::get_hash_type_from_str(&hash_type_arg);
-    let hash_file_name = format!("checksum.{}", hash_type_arg.to_lowercase());
-
-    let mut process_type = HashFileProcessType::Create;
-
-    let hash_file_path: PathBuf = [target_path, &hash_file_name].iter().collect();
-    if hash_file_path.is_file() {
-        process_type = HashFileProcessType::Verify;
-    }
-
-    let mut processor = HashFileProcessor::new(
-        process_type,
-        hash_type,
-        &hash_file_name,
-        bin_file_name,
-        target_path
-    );
+    let mut processor = HashFileProcessor::new(hash_type, bin_path, target_path, force_create);
+    let process_type = processor.get_process_type();
     processor.set_progress_event_handler(
         Box::new(|args| println!("processing {}", args.relative_file_path)));
 
@@ -86,11 +74,7 @@ fn main() {
     #[cfg(windows)]
     let _ = ansi_term::enable_ansi_support(); // for Windows
 
-    let args = env::args().collect::<Vec<_>>();
-
-    let bin_file_path = Path::new(&args[0]);
-    let bin_file_name = bin_file_path.file_name().unwrap().to_str().unwrap();
-    let result = run(bin_file_name);
+    let result = run(&env::args().nth(0).unwrap());
 
     if let Err(err) = result {
         if let Some(clap_err) = err.downcast_ref::<clap::Error>() {
