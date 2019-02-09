@@ -1,5 +1,6 @@
+use std::env;
 use std::error::Error;
-use std::path::{MAIN_SEPARATOR, Path, PathBuf};
+use std::path::{MAIN_SEPARATOR, PathBuf};
 
 use cancellation::{CancellationToken};
 
@@ -62,7 +63,6 @@ const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2097152;
 impl<'a> HashFileProcessor<'a> {
 	pub fn new(
 		hash_type: HashType,
-		bin_path_str: &str,
 		base_path_str: &str,
 		force_create: bool) -> Self {
 		let hash_type_str: &str = hash_type.into();
@@ -84,18 +84,15 @@ impl<'a> HashFileProcessor<'a> {
 			base_path_normalized = base_path_str;
 		}
 
-		let bin_path = Path::new(bin_path_str);
+		let bin_path = env::current_exe().unwrap();
 		let mut bin_file_name = bin_path.file_name().unwrap().to_str().unwrap();
-		let tmp = bin_path.canonicalize().unwrap();
-		let bin_cano_path = tmp.to_str().unwrap();
-		let base_path = PathBuf::from(base_path_str);
-		let tmp = base_path.canonicalize().unwrap();
-		let base_cano_path = tmp.to_str().unwrap();
-		if bin_cano_path != format!("{}{}{}", base_cano_path, MAIN_SEPARATOR, bin_file_name) {
+		let mut work_path = env::current_dir().unwrap();
+		work_path.push(bin_file_name);
+		if !work_path.is_file() {
 			// the app binary is not in the target root. ignore skip logic.
 			bin_file_name = "";
 		}
-
+	
 		HashFileProcessor {
 			hash_file: HashFile::new(),
 			hash_type,
@@ -188,10 +185,6 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 		}
 
 		let relative_file_path = &file_path_str[(self.base_path_len + 1)..];
-		if relative_file_path == self.bin_file_name {
-			return; // skip app binary file
-		}
-
 		let file_size = file_path.metadata().unwrap().len();
 		let hash_file_entry = self.hash_file.get_entry(relative_file_path);
 		if let Some(file_entry) = hash_file_entry {
@@ -201,13 +194,14 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 				});
 			}
 		}
-		else {
-			if self.process_type == HashFileProcessType::Verify {
-				self.report.push(ReportEntry {
-					file_path: relative_file_path.to_string(), state: FileState::Unknown
-				});
-				return;
-			}
+		else if relative_file_path == self.bin_file_name {
+			return; // skip app binary file
+		}
+		else if self.process_type == HashFileProcessType::Verify {
+			self.report.push(ReportEntry {
+				file_path: relative_file_path.to_string(), state: FileState::Unknown
+			});
+			return;
 		}
 
         let mut file_hasher = crate::get_file_hasher(self.hash_type, file_path_str);

@@ -1,4 +1,3 @@
-use std::env;
 use std::path::Path;
 use std::io::{Error, ErrorKind};
 
@@ -10,7 +9,7 @@ use cancellation::{CancellationTokenSource};
 
 use hshchk_lib::hash_file_process::HashFileProcessor;
 
-fn run(bin_path: &str) -> Result<(), Box<::std::error::Error>> {
+fn run() -> Result<(), Box<::std::error::Error>> {
     let app = App::new(crate_name!())
         .setting(AppSettings::ColorAuto)
         .setting(AppSettings::ColoredHelp)
@@ -58,7 +57,7 @@ fn run(bin_path: &str) -> Result<(), Box<::std::error::Error>> {
 
     ctrlc::set_handler(move || { cts.cancel(); }).expect("Error setting Ctrl-C handler");
 
-    let mut processor = HashFileProcessor::new(hash_type, bin_path, target_path, force_create);
+    let mut processor = HashFileProcessor::new(hash_type, target_path, force_create);
     let process_type = processor.get_process_type();
     processor.set_progress_event_handler(
         Box::new(|args| println!("processing {}", args.relative_file_path)));
@@ -74,7 +73,7 @@ fn main() {
     #[cfg(windows)]
     let _ = ansi_term::enable_ansi_support(); // for Windows
 
-    let result = run(&env::args().nth(0).unwrap());
+    let result = run();
 
     if let Err(err) = result {
         if let Some(clap_err) = err.downcast_ref::<clap::Error>() {
