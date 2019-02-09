@@ -9,7 +9,7 @@ pub trait BlockHasher {
     fn update(&mut self, byte_count: usize);
     fn digest(&mut self) -> String;
     fn set_bytes_processed_event_handler(&mut self, handler: Box<Fn(BytesProcessedEventArgs)>);
-    fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(&mut self, 
+    fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(&mut self,
         handler: Box<Fn(BytesProcessedEventArgs)>,
         bytes_processed_notification_block_size: usize);
     fn bytes_processed_notification_block_size(&self) -> usize;
@@ -39,7 +39,7 @@ pub trait BlockHasher {
                         self.handle_bytes_processed_event(BytesProcessedEventArgs { bytes_processed });
                     }
                 }
-            } 
+            }
             else {
                 break;
             }

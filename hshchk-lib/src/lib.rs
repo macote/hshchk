@@ -31,7 +31,7 @@ fn open_file(file_path: &str) -> File {
     let path = Path::new(file_path);
     let path_displayable = path.display();
     match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {}", 
+        Err(why) => panic!("couldn't open {}: {}",
             path_displayable,
             why.description()),
         Ok(file) => file,
@@ -42,7 +42,7 @@ fn create_file(file_path: &str) -> File {
     let path = Path::new(file_path);
     let path_displayable = path.display();
     match File::create(&path) {
-        Err(why) => panic!("couldn't create {}: {}", 
+        Err(why) => panic!("couldn't create {}: {}",
             path_displayable,
             why.description()),
         Ok(file) => file,

@@ -46,11 +46,11 @@ impl<T: Digest> BlockHasher for FileHash<T> {
     }
     fn set_bytes_processed_event_handler(&mut self, handler: Box<Fn(BytesProcessedEventArgs)>) {
         self.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
-            handler, 
+            handler,
             DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE
         )
     }
-    fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(&mut self, 
+    fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(&mut self,
         handler: Box<Fn(BytesProcessedEventArgs)>,
         bytes_processed_notification_block_size: usize) {
         self.bytes_processed_event = Some(handler);

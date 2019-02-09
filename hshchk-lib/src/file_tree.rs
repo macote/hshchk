@@ -24,7 +24,7 @@ impl<'a, T: FileTreeProcessor> FileTree<'a, T> {
                 if cancellation_token.is_canceled() {
                     break;
                 }
-                
+
                 let entry = entry?;
                 let path = entry.path();
                 if path.is_dir() {
@@ -34,7 +34,7 @@ impl<'a, T: FileTreeProcessor> FileTree<'a, T> {
                 }
             }
         }
-        
-        Ok(())        
+
+        Ok(())
     }
 }

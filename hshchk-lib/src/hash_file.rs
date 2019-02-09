@@ -29,7 +29,7 @@ impl HashFile {
             let split = content.split("|");
             let parts: Vec<&str> = split.collect();
             self.add_entry(
-                parts[0], 
+                parts[0],
                 parts[1].parse::<u64>().unwrap(),
                 parts[2]);
         }
@@ -57,7 +57,7 @@ impl HashFile {
 
     pub fn add_entry(&mut self, file_path: &str, size: u64, digest: &str) {
         self.files.insert(
-            file_path.into(), 
+            file_path.into(),
             FileEntry { file_path: String::from(file_path), size, digest: digest.into() });
     }
 

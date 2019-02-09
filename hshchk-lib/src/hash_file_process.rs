@@ -92,7 +92,7 @@ impl<'a> HashFileProcessor<'a> {
 			// the app binary is not in the target root. ignore skip logic.
 			bin_file_name = "";
 		}
-	
+
 		HashFileProcessor {
 			hash_file: HashFile::new(),
 			hash_type,
@@ -118,7 +118,7 @@ impl<'a> HashFileProcessor<'a> {
 		let path = self.base_path.clone();
 		let mut file_tree = FileTree::new(self);
 		match file_tree.traverse(&path, cancellation_token) {
-			Err(why) => panic!("couldn't traverse {}: {}", 
+			Err(why) => panic!("couldn't traverse {}: {}",
 				path.display(),
 				why.description()),
 			Ok(_) => ()
@@ -158,11 +158,11 @@ impl<'a> HashFileProcessor<'a> {
 	}
     pub fn set_progress_event_handler(&mut self, handler: Box<Fn(HashFileProcessorProgressEventArgs)>) {
         self.set_progress_event_handler_with_bytes_processed_notification_block_size(
-            handler, 
+            handler,
             DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE
         )
     }
-    pub fn set_progress_event_handler_with_bytes_processed_notification_block_size(&mut self, 
+    pub fn set_progress_event_handler_with_bytes_processed_notification_block_size(&mut self,
         handler: Box<Fn(HashFileProcessorProgressEventArgs)>,
         bytes_processed_notification_block_size: usize) {
         self.progress_event = Some(handler);
@@ -241,7 +241,7 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 					});
 				}
 			}
-			
+
 			self.hash_file.remove_entry(relative_file_path);
 		}
 	}
