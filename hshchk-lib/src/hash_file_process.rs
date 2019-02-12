@@ -52,9 +52,9 @@ pub struct HashFileProcessor<'a> {
 	base_path: PathBuf,
 	base_path_len: usize,
 	cancellation_token: Option<&'a CancellationToken>,
-	progress_event: Option<Box<Fn(HashFileProcessorProgressEventArgs)>>,
+	progress_event: Option<Box<Fn(HashFileProcessorProgressEventArgs) + 'a>>,
     bytes_processed_notification_block_size: usize,
-	complete_event: Option<Box<Fn()>>,
+	complete_event: Option<Box<Fn() + 'a>>,
 	report: Vec<ReportEntry>,
 }
 
@@ -156,19 +156,19 @@ impl<'a> HashFileProcessor<'a> {
 	}
 	pub fn save_report(&self) {
 	}
-    pub fn set_progress_event_handler(&mut self, handler: Box<Fn(HashFileProcessorProgressEventArgs)>) {
+    pub fn set_progress_event_handler(&mut self, handler: Box<Fn(HashFileProcessorProgressEventArgs) + 'a>) {
         self.set_progress_event_handler_with_bytes_processed_notification_block_size(
             handler,
             DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE
         )
     }
     pub fn set_progress_event_handler_with_bytes_processed_notification_block_size(&mut self,
-        handler: Box<Fn(HashFileProcessorProgressEventArgs)>,
+        handler: Box<Fn(HashFileProcessorProgressEventArgs) + 'a>,
         bytes_processed_notification_block_size: usize) {
         self.progress_event = Some(handler);
         self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
     }
-    pub fn set_complete_event_handler(&mut self, handler: Box<Fn()>) {
+    pub fn set_complete_event_handler(&mut self, handler: Box<Fn() + 'a>) {
         self.complete_event = Some(handler);
     }
 
@@ -209,18 +209,17 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
 		if let Some(handler) = &self.progress_event {
 			let file_path = relative_file_path.to_string();
 			handler(HashFileProcessorProgressEventArgs {
-				relative_file_path: file_path,
+				relative_file_path: file_path.clone(),
 				file_size,
 				bytes_processed: 0,
 			});
 			file_hasher.set_bytes_processed_event_handler(
-				Box::new(|_args| {
-					// TODO: fix this. use Rc<> (or Arc<>?) instead of Box<>.
-					// handler(HashFileProcessorProgressEventArgs {
-					// 	relative_file_path: file_path,
-					// 	file_size,
-					// 	bytes_processed: args.bytes_processed,
-					// });
+				Box::new(move |args| {
+					handler(HashFileProcessorProgressEventArgs {
+						relative_file_path: file_path.clone(),
+						file_size,
+						bytes_processed: args.bytes_processed,
+					});
 				}));
 		}
 

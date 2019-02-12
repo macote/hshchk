@@ -60,7 +60,7 @@ fn run() -> Result<(), Box<::std::error::Error>> {
     let mut processor = HashFileProcessor::new(hash_type, target_path, force_create);
     let process_type = processor.get_process_type();
     processor.set_progress_event_handler(
-        Box::new(|args| println!("Processing {}", args.relative_file_path)));
+        Box::new(|args| println!("Processing {} ({}; {})", args.relative_file_path, args.file_size, args.bytes_processed)));
 
     let result = processor.process(&processor_cancellation_token);
 

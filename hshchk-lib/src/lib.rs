@@ -69,7 +69,7 @@ fn get_blake2s_file_hasher(file_path: &str) -> FileHash<Blake2s> {
     FileHash::new(file_path)
 }
 
-pub fn get_file_hasher(hash_type: HashType, file_path: &str) -> Box<BlockHasher> {
+pub fn get_file_hasher<'a>(hash_type: HashType, file_path: &'a str) -> Box<BlockHasher + 'a> {
     match hash_type {
         HashType::SHA1 => Box::new(get_sha1_file_hasher(file_path)),
         HashType::SHA256 => Box::new(get_sha256_file_hasher(file_path)),

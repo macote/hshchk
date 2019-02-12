@@ -5,19 +5,19 @@ use digest::Digest;
 use crate::block_hasher::{BytesProcessedEventArgs, BlockHasher};
 use crate::open_file;
 
-pub struct FileHash<T: Digest> {
+pub struct FileHash<'a, T: Digest> {
     reader: BufReader<std::fs::File>,
     hasher: T,
     buffer: Vec<u8>,
     buffer_size: usize,
-    bytes_processed_event: Option<Box<Fn(BytesProcessedEventArgs)>>,
+    bytes_processed_event: Option<Box<Fn(BytesProcessedEventArgs) + 'a>>,
     bytes_processed_notification_block_size: usize,
 }
 
 const DEFAULT_BUFFER_SIZE: usize = 1048576;
 const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2097152;
 
-impl<T: Digest> FileHash<T> {
+impl<'a, T: Digest> FileHash<'a, T> {
     pub fn new_with_buffer_size(file_path: &str, buffer_size: usize) -> Self {
         FileHash {
             reader: BufReader::new(open_file(&file_path)),
@@ -33,7 +33,7 @@ impl<T: Digest> FileHash<T> {
     }
 }
 
-impl<T: Digest> BlockHasher for FileHash<T> {
+impl<'a, T: Digest> BlockHasher<'a> for FileHash<'a, T> {
     fn read(&mut self) -> usize {
         let mut adaptor = (&mut self.reader).take(self.buffer_size as u64);
         adaptor.read_to_end(&mut self.buffer).unwrap()
@@ -44,14 +44,14 @@ impl<T: Digest> BlockHasher for FileHash<T> {
     fn digest(&mut self) -> String {
         hex::encode(self.hasher.result_reset())
     }
-    fn set_bytes_processed_event_handler(&mut self, handler: Box<Fn(BytesProcessedEventArgs)>) {
+    fn set_bytes_processed_event_handler(&mut self, handler: Box<Fn(BytesProcessedEventArgs) + 'a>) {
         self.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
             handler,
             DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE
         )
     }
     fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(&mut self,
-        handler: Box<Fn(BytesProcessedEventArgs)>,
+        handler: Box<Fn(BytesProcessedEventArgs) + 'a>,
         bytes_processed_notification_block_size: usize) {
         self.bytes_processed_event = Some(handler);
         self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
