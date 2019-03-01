@@ -12,6 +12,7 @@ edition = "2018"
 [dependencies]
 cancellation = "0.1"
 digest = "0.8.0"
+md-5 = "0.8.0"
 sha-1 = "0.8.0"
 sha2 = "0.8.0"
 blake2 = "0.8.0"

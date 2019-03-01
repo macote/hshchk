@@ -18,7 +18,7 @@ impl<'a, T: FileTreeProcessor> FileTree<'a, T> {
             processor
         }
     }
-    pub fn traverse(&mut self, path: &Path, cancellation_token: &'a CancellationToken) -> Result<()> {
+    pub fn traverse(&mut self, path: &Path, cancellation_token: &CancellationToken) -> Result<()> {
         if path.is_dir() {
             for entry in fs::read_dir(path)? {
                 if cancellation_token.is_canceled() {

@@ -10,7 +10,7 @@ pub struct FileHash<'a, T: Digest> {
     hasher: T,
     buffer: Vec<u8>,
     buffer_size: usize,
-    bytes_processed_event: Option<Box<Fn(BytesProcessedEventArgs) + 'a>>,
+    bytes_processed_event: Option<Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>>,
     bytes_processed_notification_block_size: usize,
 }
 
@@ -44,14 +44,14 @@ impl<'a, T: Digest> BlockHasher<'a> for FileHash<'a, T> {
     fn digest(&mut self) -> String {
         hex::encode(self.hasher.result_reset())
     }
-    fn set_bytes_processed_event_handler(&mut self, handler: Box<Fn(BytesProcessedEventArgs) + 'a>) {
+    fn set_bytes_processed_event_handler(&mut self, handler: Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>) {
         self.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
             handler,
             DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE
         )
     }
     fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(&mut self,
-        handler: Box<Fn(BytesProcessedEventArgs) + 'a>,
+        handler: Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>,
         bytes_processed_notification_block_size: usize) {
         self.bytes_processed_event = Some(handler);
         self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;

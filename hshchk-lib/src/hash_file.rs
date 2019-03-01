@@ -40,12 +40,9 @@ impl HashFile {
         let mut writer = BufWriter::new(&file);
         for file_entry in self.files.values() {
             let mut line = String::new();
-            line.push_str(&file_entry.file_path);
-            line.push_str("|");
-            line.push_str(&file_entry.size.to_string());
-            line.push_str("|");
-            line.push_str(&file_entry.digest);
-            line.push_str("\n");
+            line.push_str(
+                &format!("{}|{}|{}\n", 
+                    &file_entry.file_path, &file_entry.size.to_string(), &file_entry.digest));
             match writer.write(line.as_bytes()) {
                 Err(why) => panic!("couldn't write to {}: {}",
                     file_path,
