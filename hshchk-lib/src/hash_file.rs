@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::io::{BufReader, BufWriter, prelude::*};
+use std::io::{
+    prelude::{BufRead, Write},
+    BufReader, BufWriter,
+};
 
-use crate::{open_file, create_file};
+use crate::{create_file, open_file};
 
 pub struct FileEntry {
     pub file_path: String,
@@ -15,7 +18,7 @@ pub struct HashFile {
 }
 
 impl HashFile {
-    pub fn new () -> Self {
+    pub fn new() -> Self {
         HashFile {
             files: HashMap::new(),
         }
@@ -26,12 +29,9 @@ impl HashFile {
         let reader = BufReader::new(file);
         for (_, line) in reader.lines().enumerate() {
             let content = line.unwrap();
-            let split = content.split("|");
+            let split = content.split('|');
             let parts: Vec<&str> = split.collect();
-            self.add_entry(
-                parts[0],
-                parts[1].parse::<u64>().unwrap(),
-                parts[2]);
+            self.add_entry(parts[0], parts[1].parse::<u64>().unwrap(), parts[2]);
         }
     }
 
@@ -40,14 +40,14 @@ impl HashFile {
         let mut writer = BufWriter::new(&file);
         for file_entry in self.files.values() {
             let mut line = String::new();
-            line.push_str(
-                &format!("{}|{}|{}\n", 
-                    &file_entry.file_path, &file_entry.size.to_string(), &file_entry.digest));
-            match writer.write(line.as_bytes()) {
-                Err(why) => panic!("couldn't write to {}: {}",
-                    file_path,
-                    why.description()),
-                Ok(_) => ()
+            line.push_str(&format!(
+                "{}|{}|{}\n",
+                &file_entry.file_path,
+                &file_entry.size.to_string(),
+                &file_entry.digest
+            ));
+            if let Err(why) = writer.write(line.as_bytes()) {
+                panic!("couldn't write to {}: {}", file_path, why.description())
             };
         }
     }
@@ -55,15 +55,16 @@ impl HashFile {
     pub fn add_entry(&mut self, file_path: &str, size: u64, digest: &str) {
         self.files.insert(
             file_path.into(),
-            FileEntry { file_path: String::from(file_path), size, digest: digest.into() });
+            FileEntry {
+                file_path: String::from(file_path),
+                size,
+                digest: digest.into(),
+            },
+        );
     }
 
     pub fn remove_entry(&mut self, file_path: &str) {
         self.files.remove(file_path);
-    }
-
-    pub fn contains_entry(&self, file_path: &str) -> bool {
-        self.files.contains_key(file_path)
     }
 
     pub fn get_entry(&self, file_path: &str) -> Option<&FileEntry> {

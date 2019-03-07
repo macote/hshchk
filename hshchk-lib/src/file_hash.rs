@@ -2,7 +2,7 @@ use std::io::{BufReader, Read};
 
 use digest::Digest;
 
-use crate::block_hasher::{BytesProcessedEventArgs, BlockHasher};
+use crate::block_hasher::{BlockHasher, BytesProcessedEventArgs};
 use crate::open_file;
 
 pub struct FileHash<'a, T: Digest> {
@@ -14,8 +14,8 @@ pub struct FileHash<'a, T: Digest> {
     bytes_processed_notification_block_size: usize,
 }
 
-const DEFAULT_BUFFER_SIZE: usize = 1048576;
-const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2097152;
+const DEFAULT_BUFFER_SIZE: usize = 1_048_576;
+const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2_097_152;
 
 impl<'a, T: Digest> FileHash<'a, T> {
     pub fn new_with_buffer_size(file_path: &str, buffer_size: usize) -> Self {
@@ -44,15 +44,20 @@ impl<'a, T: Digest> BlockHasher<'a> for FileHash<'a, T> {
     fn digest(&mut self) -> String {
         hex::encode(self.hasher.result_reset())
     }
-    fn set_bytes_processed_event_handler(&mut self, handler: Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>) {
+    fn set_bytes_processed_event_handler(
+        &mut self,
+        handler: Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>,
+    ) {
         self.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
             handler,
-            DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE
+            DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
         )
     }
-    fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(&mut self,
+    fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
+        &mut self,
         handler: Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>,
-        bytes_processed_notification_block_size: usize) {
+        bytes_processed_notification_block_size: usize,
+    ) {
         self.bytes_processed_event = Some(handler);
         self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
     }
@@ -65,7 +70,7 @@ impl<'a, T: Digest> BlockHasher<'a> for FileHash<'a, T> {
     fn handle_bytes_processed_event(&self, args: BytesProcessedEventArgs) {
         match &self.bytes_processed_event {
             Some(handler) => handler(args),
-            None => ()
+            None => (),
         }
     }
 }

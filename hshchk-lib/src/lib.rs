@@ -2,29 +2,29 @@ use std::error::Error;
 use std::fs::File;
 use std::path::Path;
 
-use md5::{Md5};
-use sha1::{Sha1};
-use sha2::{Sha256, Sha512};
 use blake2::{Blake2b, Blake2s};
+use md5::Md5;
+use sha1::Sha1;
+use sha2::{Sha256, Sha512};
 
 use strum::IntoEnumIterator;
-use strum_macros::{IntoStaticStr, EnumIter, EnumString};
+use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
-use crate::file_hash::FileHash;
 use crate::block_hasher::BlockHasher;
+use crate::file_hash::FileHash;
 
-pub mod block_hasher;
-pub mod file_hash;
-pub mod file_tree;
-pub mod hash_file;
+mod block_hasher;
+mod file_hash;
+mod file_tree;
+mod hash_file;
 pub mod hash_file_process;
 
 #[derive(Copy, Clone, PartialEq, Debug, EnumString, EnumIter, IntoStaticStr)]
 pub enum HashType {
-	MD5,
-	SHA1,
-	SHA256,
-	SHA512,
+    MD5,
+    SHA1,
+    SHA256,
+    SHA512,
     BLAKE2B,
     BLAKE2S,
 }
@@ -33,9 +33,7 @@ fn open_file(file_path: &str) -> File {
     let path = Path::new(file_path);
     let path_displayable = path.display();
     match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {}",
-            path_displayable,
-            why.description()),
+        Err(why) => panic!("couldn't open {}: {}", path_displayable, why.description()),
         Ok(file) => file,
     }
 }
@@ -44,9 +42,11 @@ fn create_file(file_path: &str) -> File {
     let path = Path::new(file_path);
     let path_displayable = path.display();
     match File::create(&path) {
-        Err(why) => panic!("couldn't create {}: {}",
+        Err(why) => panic!(
+            "couldn't create {}: {}",
             path_displayable,
-            why.description()),
+            why.description()
+        ),
         Ok(file) => file,
     }
 }
@@ -107,10 +107,6 @@ mod tests {
     }
 
     // block hasher
-    #[test]
-    fn block_hasher_compute() {
-
-    }
 
     // file hash
 

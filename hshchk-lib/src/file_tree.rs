@@ -1,22 +1,20 @@
+use std::fs;
 use std::io::Result;
-use std::{fs};
 use std::path::{Path, PathBuf};
 
-use cancellation::{CancellationToken};
+use cancellation::CancellationToken;
 
 pub trait FileTreeProcessor {
     fn process_file(&mut self, file_path: &PathBuf);
 }
 
 pub struct FileTree<'a, T: FileTreeProcessor> {
-    processor: &'a mut T
+    processor: &'a mut T,
 }
 
 impl<'a, T: FileTreeProcessor> FileTree<'a, T> {
     pub fn new(processor: &'a mut T) -> Self {
-        FileTree {
-            processor
-        }
+        FileTree { processor }
     }
     pub fn traverse(&mut self, path: &Path, cancellation_token: &CancellationToken) -> Result<()> {
         if path.is_dir() {
