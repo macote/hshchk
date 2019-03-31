@@ -35,6 +35,7 @@ impl<'a, T: Digest> FileHash<'a, T> {
 
 impl<'a, T: Digest> BlockHasher<'a> for FileHash<'a, T> {
     fn read(&mut self) -> usize {
+        self.buffer.clear();
         let mut adaptor = (&mut self.reader).take(self.buffer_size as u64);
         adaptor.read_to_end(&mut self.buffer).unwrap()
     }

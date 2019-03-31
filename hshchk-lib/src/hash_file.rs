@@ -31,7 +31,7 @@ impl HashFile {
             let content = line.unwrap();
             let split = content.split('|');
             let parts: Vec<&str> = split.collect();
-            self.add_entry(parts[0], parts[1].parse::<u64>().unwrap(), parts[2]);
+            self.add_entry(parts[0], parts[1].parse::<u64>().unwrap(), &parts[2].to_lowercase());
         }
     }
 

@@ -4,7 +4,6 @@ use std::path::{PathBuf, MAIN_SEPARATOR};
 use std::sync::Arc;
 
 use cancellation::CancellationToken;
-
 use strum::IntoEnumIterator;
 
 use crate::file_tree::{FileTree, FileTreeProcessor};
@@ -21,11 +20,8 @@ pub enum HashFileProcessType {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum HashFileProcessResult {
-    FilesAreMissing,
-    CouldNotOpenHashFile,
-    ErrorsOccurredWhileProcessing,
-    NoFileToProcess,
     Success,
+    Error,
     Canceled,
 }
 
@@ -156,23 +152,23 @@ impl<'a> HashFileProcessor<'a> {
             return HashFileProcessResult::Canceled;
         }
 
-        if self.process_type == HashFileProcessType::Create {
-            if self.hash_file.is_empty() {
-                return HashFileProcessResult::NoFileToProcess;
-            }
-
-            if self.error_count > 0 {
-                return HashFileProcessResult::ErrorsOccurredWhileProcessing;
-            }
-
-            self.hash_file.save(&self.hash_file_path);
-        } else if self.process_type == HashFileProcessType::Verify {
-            if !self.hash_file.is_empty() {
-                for file_path in self.hash_file.get_file_paths() {
-                    self.handle_error(&file_path, FileErrorState::Missing);
+        if self.error_count > 0 {
+            return HashFileProcessResult::Error;
+        } else {
+            if self.process_type == HashFileProcessType::Create {
+                if self.hash_file.is_empty() {
+                    return HashFileProcessResult::Error;
                 }
-            } else if self.error_count != 0 {
-                return HashFileProcessResult::ErrorsOccurredWhileProcessing;
+
+                self.hash_file.save(&self.hash_file_path);
+            } else if self.process_type == HashFileProcessType::Verify {
+                if !self.hash_file.is_empty() {
+                    for file_path in self.hash_file.get_file_paths() {
+                        self.handle_error(&file_path, FileErrorState::Missing);
+                    }
+
+                    return HashFileProcessResult::Error;
+                }
             }
         }
 
@@ -194,6 +190,9 @@ impl<'a> HashFileProcessor<'a> {
     ) {
         self.progress_event = Some(handler);
         self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
+    }
+    pub fn set_error_event_handler(&mut self, handler: Box<Fn(FileErrorEntry) + Send + Sync + 'a>) {
+        self.error_event = Some(handler);
     }
     pub fn set_complete_event_handler(&mut self, handler: Box<Fn(HashFileProcessResult) + Send + Sync + 'a>) {
         self.complete_event = Some(handler);

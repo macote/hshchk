@@ -5,7 +5,7 @@ use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
 
 use cancellation::CancellationTokenSource;
 
-use hshchk_lib::hash_file_process::HashFileProcessor;
+use hshchk_lib::hash_file_process::{HashFileProcessor, HashFileProcessResult};
 
 fn run() -> Result<(), Box<::std::error::Error>> {
     let app = App::new(crate_name!())
@@ -36,6 +36,12 @@ fn run() -> Result<(), Box<::std::error::Error>> {
                 .short("c")
                 .long("create")
                 .help("Force create mode and overwrite checksum file if it exists"),
+        )
+        .arg(
+            Arg::with_name("silent")
+                .short("s")
+                .long("silent")
+                .help("Don't output to stdout"),
         );
 
     let matches = app.get_matches_safe()?;
@@ -59,29 +65,51 @@ fn run() -> Result<(), Box<::std::error::Error>> {
         .to_uppercase();
     let hash_type = hshchk_lib::get_hash_type_from_str(&hash_type_arg);
     let force_create = matches.is_present("create");
+    let silent = matches.is_present("silent");
 
     let cts = CancellationTokenSource::new();
-    let cancellation_token = cts.token();
-    let processor_cancellation_token = cancellation_token.clone();
+    let main_cancellation_token = cts.token();
+    let processor_cancellation_token = main_cancellation_token.clone();
 
     ctrlc::set_handler(move || {
         cts.cancel();
     })
-    .expect("Error setting Ctrl-C handler.");
+    .expect("Failed to set Ctrl-C handler.");
 
+    let result: HashFileProcessResult;
     let mut processor = HashFileProcessor::new(hash_type, target_path, force_create);
-    let process_type = processor.get_process_type();
 
-    processor.set_progress_event_handler(Box::new(|args| {
-        println!(
-            "Processing {} ({}; {})",
-            args.relative_file_path, args.file_size, args.bytes_processed
+    processor.set_error_event_handler(Box::new(|error| {
+        eprintln!(
+            "{:?}: {:?}",
+            error.file_path, error.state
         )
     }));
 
-    let result = processor.process(processor_cancellation_token);
+    if !silent {
+        processor.set_progress_event_handler(Box::new(|args| {
+            println!(
+                "Processing {} ({}; {})",
+                args.relative_file_path, args.file_size, args.bytes_processed
+            )
+        }));
+        let process_type = processor.get_process_type();
+        processor.set_complete_event_handler(Box::new(move |result| {
+            println!(
+                "{:?} result: {:?}",
+                process_type, result
+            )
+        }));
+    }
 
-    println!("{:?} result: {:?}", process_type, result);
+    result = processor.process(processor_cancellation_token);
+
+    if result != HashFileProcessResult::Success {
+        return Err(Box::new(Error::new(
+            ErrorKind::Other,
+            "The hash check process failed.",
+        )));
+    }
 
     Ok(())
 }

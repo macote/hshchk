@@ -1,0 +1,17 @@
+  - verbosity
+    - progress loop
+      - filetree updates
+      - block updates
+      - overall
+    - defaults to progress output?
+  - error handling
+    - files inaccessible / in use
+  - reporting
+  	- defaults to stderr
+    - save to file
+  - add support for 'xyz'sum file format
+    - sha1sum, etc.
+  - path vs path_str
+  - unit tests
+  - packaging
+  - release
