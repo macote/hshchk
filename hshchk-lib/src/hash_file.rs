@@ -4,6 +4,7 @@ use std::io::{
     prelude::{BufRead, Write},
     BufReader, BufWriter,
 };
+use std::path::MAIN_SEPARATOR;
 
 use crate::{create_file, open_file};
 
@@ -31,7 +32,12 @@ impl HashFile {
             let content = line.unwrap();
             let split = content.split('|');
             let parts: Vec<&str> = split.collect();
-            self.add_entry(parts[0], parts[1].parse::<u64>().unwrap(), &parts[2].to_lowercase());
+            let file_name = parts[0].replace(&replaceable_separator(), &MAIN_SEPARATOR.to_string());
+            self.add_entry(
+                &file_name,
+                parts[1].parse::<u64>().unwrap(),
+                &parts[2].to_lowercase(),
+            );
         }
     }
 
@@ -77,5 +83,12 @@ impl HashFile {
 
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
+    }
+}
+
+fn replaceable_separator() -> String {
+    match MAIN_SEPARATOR {
+        '/' => String::from("\\"),
+        _ => String::from("/"),
     }
 }

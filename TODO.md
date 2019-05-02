@@ -1,3 +1,7 @@
+  - features
+    - -f flag: check file size only
+    - -i flag: ignore extra files
+    - -x flag: exclude files
   - verbosity
     - progress loop
       - filetree updates

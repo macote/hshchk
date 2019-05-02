@@ -1,6 +1,7 @@
 use std::env;
 use std::error::Error;
-use std::path::{PathBuf, MAIN_SEPARATOR};
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use cancellation::CancellationToken;
@@ -27,7 +28,7 @@ pub enum HashFileProcessResult {
 
 #[derive(Debug, PartialEq)]
 pub enum FileErrorState {
-    Unknown,
+    Extra,
     Missing,
     IncorrectSize,
     IncorrectHash,
@@ -67,8 +68,11 @@ impl<'a> HashFileProcessor<'a> {
     pub fn new(hash_type: HashType, base_path_str: &str, force_create: bool) -> Self {
         let mut process_type = HashFileProcessType::Create;
         let mut actual_hash_type = hash_type;
+        let cano_base_path = fs::canonicalize(PathBuf::from(base_path_str)).unwrap();
+        let cano_base_path_str = cano_base_path.to_str().unwrap();
         if !force_create {
-            if let Some(existing_hash_type) = get_existing_file_hash_type(base_path_str, hash_type)
+            if let Some(existing_hash_type) =
+                get_existing_file_hash_type(cano_base_path_str, hash_type)
             {
                 actual_hash_type = existing_hash_type;
                 process_type = HashFileProcessType::Verify;
@@ -76,16 +80,7 @@ impl<'a> HashFileProcessor<'a> {
         }
 
         let hash_file_name = get_hash_file_name(actual_hash_type);
-        let hash_file_path: PathBuf = [base_path_str, &hash_file_name].iter().collect();
-
-        let base_path_normalized: &str;
-        if base_path_str.ends_with(MAIN_SEPARATOR) {
-            base_path_normalized = &base_path_str[..base_path_str.len() - 1];
-        } else if base_path_str.is_empty() {
-            base_path_normalized = ".";
-        } else {
-            base_path_normalized = base_path_str;
-        }
+        let hash_file_path: PathBuf = [cano_base_path_str, &hash_file_name].iter().collect();
 
         let bin_path = env::current_exe().unwrap();
         let mut bin_file_name = bin_path.file_name().unwrap().to_str().unwrap();
@@ -102,8 +97,8 @@ impl<'a> HashFileProcessor<'a> {
             process_type,
             hash_file_path: String::from(hash_file_path.to_str().unwrap()),
             bin_file_name: bin_file_name.to_string(),
-            base_path: PathBuf::from(base_path_normalized),
-            base_path_len: base_path_normalized.len(),
+            base_path: PathBuf::from(cano_base_path_str),
+            base_path_len: cano_base_path_str.len(),
             error_count: 0,
             bytes_processed_notification_block_size:
                 DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
@@ -125,12 +120,15 @@ impl<'a> HashFileProcessor<'a> {
     pub fn process(&mut self, cancellation_token: Arc<CancellationToken>) -> HashFileProcessResult {
         let result = self.process_internal(cancellation_token);
         if let Some(handler) = &self.complete_event {
-            handler(result.clone());
+            handler(result);
         }
 
         result
     }
-    pub fn process_internal(&mut self, cancellation_token: Arc<CancellationToken>) -> HashFileProcessResult {
+    pub fn process_internal(
+        &mut self,
+        cancellation_token: Arc<CancellationToken>,
+    ) -> HashFileProcessResult {
         self.cancellation_token = Some(Arc::clone(&cancellation_token));
 
         if self.process_type == HashFileProcessType::Verify {
@@ -154,22 +152,18 @@ impl<'a> HashFileProcessor<'a> {
 
         if self.error_count > 0 {
             return HashFileProcessResult::Error;
-        } else {
-            if self.process_type == HashFileProcessType::Create {
-                if self.hash_file.is_empty() {
-                    return HashFileProcessResult::Error;
-                }
-
-                self.hash_file.save(&self.hash_file_path);
-            } else if self.process_type == HashFileProcessType::Verify {
-                if !self.hash_file.is_empty() {
-                    for file_path in self.hash_file.get_file_paths() {
-                        self.handle_error(&file_path, FileErrorState::Missing);
-                    }
-
-                    return HashFileProcessResult::Error;
-                }
+        } else if self.process_type == HashFileProcessType::Create {
+            if self.hash_file.is_empty() {
+                return HashFileProcessResult::Error;
             }
+
+            self.hash_file.save(&self.hash_file_path);
+        } else if self.process_type == HashFileProcessType::Verify && !self.hash_file.is_empty() {
+            for file_path in self.hash_file.get_file_paths() {
+                self.handle_error(&file_path, FileErrorState::Missing);
+            }
+
+            return HashFileProcessResult::Error;
         }
 
         HashFileProcessResult::Success
@@ -194,7 +188,10 @@ impl<'a> HashFileProcessor<'a> {
     pub fn set_error_event_handler(&mut self, handler: Box<Fn(FileErrorEntry) + Send + Sync + 'a>) {
         self.error_event = Some(handler);
     }
-    pub fn set_complete_event_handler(&mut self, handler: Box<Fn(HashFileProcessResult) + Send + Sync + 'a>) {
+    pub fn set_complete_event_handler(
+        &mut self,
+        handler: Box<Fn(HashFileProcessResult) + Send + Sync + 'a>,
+    ) {
         self.complete_event = Some(handler);
     }
 
@@ -211,7 +208,15 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
         }
 
         let relative_file_path = &file_path_str[(self.base_path_len + 1)..];
-        let file_size = file_path.metadata().unwrap().len();
+        let file_size: u64;
+        match file_path.metadata() {
+            Ok(metadata) => file_size = metadata.len(),
+            Err(error) => {
+                self.handle_error(relative_file_path, FileErrorState::Error(error.to_string()));
+                return;
+            }
+        }
+
         let hash_file_entry = self.hash_file.get_entry(relative_file_path);
         if let Some(file_entry) = hash_file_entry {
             if file_size != file_entry.size {
@@ -221,7 +226,7 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
         } else if relative_file_path == self.bin_file_name {
             return; // skip app binary file
         } else if self.process_type == HashFileProcessType::Verify {
-            self.handle_error(relative_file_path, FileErrorState::Unknown);
+            self.handle_error(relative_file_path, FileErrorState::Extra);
             return;
         }
 

@@ -5,7 +5,7 @@ use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
 
 use cancellation::CancellationTokenSource;
 
-use hshchk_lib::hash_file_process::{HashFileProcessor, HashFileProcessResult};
+use hshchk_lib::hash_file_process::{HashFileProcessResult, HashFileProcessor};
 
 fn run() -> Result<(), Box<::std::error::Error>> {
     let app = App::new(crate_name!())
@@ -76,14 +76,10 @@ fn run() -> Result<(), Box<::std::error::Error>> {
     })
     .expect("Failed to set Ctrl-C handler.");
 
-    let result: HashFileProcessResult;
     let mut processor = HashFileProcessor::new(hash_type, target_path, force_create);
 
     processor.set_error_event_handler(Box::new(|error| {
-        eprintln!(
-            "{:?}: {:?}",
-            error.file_path, error.state
-        )
+        eprintln!("{}: {:?}", error.file_path, error.state)
     }));
 
     if !silent {
@@ -91,27 +87,25 @@ fn run() -> Result<(), Box<::std::error::Error>> {
             println!(
                 "Processing {} ({}; {})",
                 args.relative_file_path, args.file_size, args.bytes_processed
-            )
+            );
         }));
         let process_type = processor.get_process_type();
         processor.set_complete_event_handler(Box::new(move |result| {
-            println!(
-                "{:?} result: {:?}",
-                process_type, result
-            )
+            println!("{:?} result: {:?}", process_type, result);
         }));
     }
 
-    result = processor.process(processor_cancellation_token);
-
-    if result != HashFileProcessResult::Success {
-        return Err(Box::new(Error::new(
+    match processor.process(processor_cancellation_token) {
+        HashFileProcessResult::Error => Err(Box::new(Error::new(
             ErrorKind::Other,
             "The hash check process failed.",
-        )));
+        ))),
+        HashFileProcessResult::Canceled => Err(Box::new(Error::new(
+            ErrorKind::Interrupted,
+            "The hash check process was canceled.",
+        ))),
+        HashFileProcessResult::Success => Ok(()),
     }
-
-    Ok(())
 }
 
 fn main() {
