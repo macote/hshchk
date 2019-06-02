@@ -1,7 +1,11 @@
+  - code
+    - HashFileProcessorOptions
   - features
     - -f flag: check file size only
-    - -i flag: ignore extra files
+    - -r flag: report extra files
     - -x flag: exclude files
+    - -o option: output file
+    - support (md5|sha1|etc.)sum file format
   - verbosity
     - progress loop
       - filetree updates
@@ -13,8 +17,6 @@
   - reporting
   	- defaults to stderr
     - save to file
-  - add support for 'xyz'sum file format
-    - sha1sum, etc.
   - path vs path_str
   - unit tests
   - packaging

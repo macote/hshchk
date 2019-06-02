@@ -28,11 +28,13 @@ impl HashFile {
     pub fn load(&mut self, file_path: &str) {
         let file = open_file(file_path);
         let reader = BufReader::new(file);
+        let file_separator = replaceable_separator();
+        let os_separator = &MAIN_SEPARATOR.to_string();
         for (_, line) in reader.lines().enumerate() {
             let content = line.unwrap();
             let split = content.split('|');
             let parts: Vec<&str> = split.collect();
-            let file_name = parts[0].replace(&replaceable_separator(), &MAIN_SEPARATOR.to_string());
+            let file_name = parts[0].replace(file_separator, os_separator);
             self.add_entry(
                 &file_name,
                 parts[1].parse::<u64>().unwrap(),
@@ -86,9 +88,9 @@ impl HashFile {
     }
 }
 
-fn replaceable_separator() -> String {
+fn replaceable_separator() -> &'static str {
     match MAIN_SEPARATOR {
-        '/' => String::from("\\"),
-        _ => String::from("/"),
+        '/' => "\\",
+        _ => "/",
     }
 }
