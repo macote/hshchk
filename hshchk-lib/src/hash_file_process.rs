@@ -40,10 +40,19 @@ pub struct FileErrorEntry {
     pub state: FileErrorState,
 }
 
-pub struct HashFileProcessorProgressEventArgs {
+pub struct HashFileProcessProgressEventArgs {
     pub relative_file_path: String,
     pub file_size: u64,
     pub bytes_processed: usize,
+}
+
+#[derive(Default)]
+pub struct HashFileProcessOptions {
+    pub base_path: String,
+    pub hash_type: Option<HashType>,
+    pub force_create: Option<bool>,
+    pub report_extra_files: Option<bool>,
+    pub check_file_size_only: Option<bool>,
 }
 
 pub struct HashFileProcessor<'a> {
@@ -54,10 +63,12 @@ pub struct HashFileProcessor<'a> {
     bin_file_name: String,
     base_path: PathBuf,
     base_path_len: usize,
+    check_file_size_only: bool,
+    report_extra_files: bool,
     error_count: usize,
     bytes_processed_notification_block_size: usize,
     cancellation_token: Option<Arc<CancellationToken>>,
-    progress_event: Option<Box<Fn(HashFileProcessorProgressEventArgs) + Send + Sync + 'a>>,
+    progress_event: Option<Box<Fn(HashFileProcessProgressEventArgs) + Send + Sync + 'a>>,
     error_event: Option<Box<Fn(FileErrorEntry) + Send + Sync + 'a>>,
     complete_event: Option<Box<Fn(HashFileProcessResult) + Send + Sync + 'a>>,
 }
@@ -65,14 +76,14 @@ pub struct HashFileProcessor<'a> {
 const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2_097_152;
 
 impl<'a> HashFileProcessor<'a> {
-    pub fn new(hash_type: HashType, base_path_str: &str, force_create: bool) -> Self {
+    pub fn new_with_options(options: HashFileProcessOptions) -> Self {
         let mut process_type = HashFileProcessType::Create;
-        let mut actual_hash_type = hash_type;
-        let cano_base_path = fs::canonicalize(PathBuf::from(base_path_str)).unwrap();
+        let mut actual_hash_type = options.hash_type.unwrap_or(HashType::SHA1);
+        let cano_base_path = fs::canonicalize(PathBuf::from(options.base_path)).unwrap();
         let cano_base_path_str = cano_base_path.to_str().unwrap();
-        if !force_create {
+        if !options.force_create.unwrap_or_default() {
             if let Some(existing_hash_type) =
-                get_existing_file_hash_type(cano_base_path_str, hash_type)
+                get_existing_file_hash_type(cano_base_path_str, actual_hash_type)
             {
                 actual_hash_type = existing_hash_type;
                 process_type = HashFileProcessType::Verify;
@@ -99,6 +110,8 @@ impl<'a> HashFileProcessor<'a> {
             bin_file_name: bin_file_name.to_string(),
             base_path: PathBuf::from(cano_base_path_str),
             base_path_len: cano_base_path_str.len(),
+            check_file_size_only: options.check_file_size_only.unwrap_or_default(),
+            report_extra_files: options.report_extra_files.unwrap_or_default(),
             error_count: 0,
             bytes_processed_notification_block_size:
                 DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
@@ -107,6 +120,14 @@ impl<'a> HashFileProcessor<'a> {
             error_event: None,
             complete_event: None,
         }
+    }
+    pub fn new(hash_type: HashType, base_path_str: &str, force_create: bool) -> Self {
+        HashFileProcessor::new_with_options(HashFileProcessOptions {
+            base_path: String::from(base_path_str),
+            hash_type: Some(hash_type),
+            force_create: Some(force_create),
+            ..Default::default()
+        })
     }
     pub fn handle_error(&mut self, file_path: &str, error_state: FileErrorState) {
         self.error_count += 1;
@@ -158,7 +179,9 @@ impl<'a> HashFileProcessor<'a> {
             }
 
             self.hash_file.save(&self.hash_file_path);
-        } else if self.process_type == HashFileProcessType::Verify && !self.hash_file.is_empty() {
+        } else if self.process_type == HashFileProcessType::Verify
+            && self.report_extra_files
+            && !self.hash_file.is_empty() {
             for file_path in self.hash_file.get_file_paths() {
                 self.handle_error(&file_path, FileErrorState::Missing);
             }
@@ -170,7 +193,7 @@ impl<'a> HashFileProcessor<'a> {
     }
     pub fn set_progress_event_handler(
         &mut self,
-        handler: Box<Fn(HashFileProcessorProgressEventArgs) + Send + Sync + 'a>,
+        handler: Box<Fn(HashFileProcessProgressEventArgs) + Send + Sync + 'a>,
     ) {
         self.set_progress_event_handler_with_bytes_processed_notification_block_size(
             handler,
@@ -179,7 +202,7 @@ impl<'a> HashFileProcessor<'a> {
     }
     pub fn set_progress_event_handler_with_bytes_processed_notification_block_size(
         &mut self,
-        handler: Box<Fn(HashFileProcessorProgressEventArgs) + Send + Sync + 'a>,
+        handler: Box<Fn(HashFileProcessProgressEventArgs) + Send + Sync + 'a>,
         bytes_processed_notification_block_size: usize,
     ) {
         self.progress_event = Some(handler);
@@ -230,31 +253,33 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
             return;
         }
 
-        let mut digest: String;
-        {
-            let mut file_hasher = crate::get_file_hasher(self.hash_type, file_path_str);
-            if let Some(handler) = &self.progress_event {
-                let file_path = relative_file_path.to_string();
-                handler(HashFileProcessorProgressEventArgs {
-                    relative_file_path: file_path.clone(),
-                    file_size,
-                    bytes_processed: 0,
-                });
-                file_hasher.set_bytes_processed_event_handler(Box::new(move |args| {
-                    handler(HashFileProcessorProgressEventArgs {
+        let mut digest = String::from("");
+        if !(self.check_file_size_only && self.process_type == HashFileProcessType::Verify) {
+            {
+                let mut file_hasher = crate::get_file_hasher(self.hash_type, file_path_str);
+                if let Some(handler) = &self.progress_event {
+                    let file_path = relative_file_path.to_string();
+                    handler(HashFileProcessProgressEventArgs {
                         relative_file_path: file_path.clone(),
                         file_size,
-                        bytes_processed: args.bytes_processed,
+                        bytes_processed: 0,
                     });
-                }));
-            }
+                    file_hasher.set_bytes_processed_event_handler(Box::new(move |args| {
+                        handler(HashFileProcessProgressEventArgs {
+                            relative_file_path: file_path.clone(),
+                            file_size,
+                            bytes_processed: args.bytes_processed,
+                        });
+                    }));
+                }
 
-            let cancellation_token = self.cancellation_token.as_ref().unwrap();
-            file_hasher.compute(cancellation_token);
-            digest = file_hasher.digest();
+                let cancellation_token = self.cancellation_token.as_ref().unwrap();
+                file_hasher.compute(cancellation_token);
+                digest = file_hasher.digest();
 
-            if cancellation_token.is_canceled() {
-                return;
+                if cancellation_token.is_canceled() {
+                    return;
+                }
             }
         }
 
@@ -263,7 +288,7 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
                 .add_entry(relative_file_path, file_size, &digest);
         } else if self.process_type == HashFileProcessType::Verify {
             if let Some(file_entry) = hash_file_entry {
-                if digest != file_entry.digest {
+                if !self.check_file_size_only && digest != file_entry.digest {
                     self.handle_error(relative_file_path, FileErrorState::IncorrectHash);
                 }
             }

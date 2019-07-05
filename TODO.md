@@ -1,9 +1,8 @@
   - code
     - HashFileProcessorOptions
   - features
-    - -f flag: check file size only
-    - -r flag: report extra files
-    - -x flag: exclude files
+    - -i option: ignore pattern
+    - -m option: check pattern
     - -o option: output file
     - support (md5|sha1|etc.)sum file format
   - verbosity

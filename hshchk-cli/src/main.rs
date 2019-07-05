@@ -5,7 +5,7 @@ use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
 
 use cancellation::CancellationTokenSource;
 
-use hshchk_lib::hash_file_process::{HashFileProcessResult, HashFileProcessor};
+use hshchk_lib::hash_file_process::{HashFileProcessOptions, HashFileProcessResult, HashFileProcessor};
 
 fn run() -> Result<(), Box<::std::error::Error>> {
     let app = App::new(crate_name!())
@@ -38,6 +38,18 @@ fn run() -> Result<(), Box<::std::error::Error>> {
                 .help("Force create mode and overwrite checksum file if it exists"),
         )
         .arg(
+            Arg::with_name("size")
+                .short("f")
+                .long("size")
+                .help("Check file size only"),
+        )
+        .arg(
+            Arg::with_name("extra")
+                .short("r")
+                .long("extra")
+                .help("Report extra files"),
+        )
+        .arg(
             Arg::with_name("silent")
                 .short("s")
                 .long("silent")
@@ -65,6 +77,8 @@ fn run() -> Result<(), Box<::std::error::Error>> {
         .to_uppercase();
     let hash_type = hshchk_lib::get_hash_type_from_str(&hash_type_arg);
     let force_create = matches.is_present("create");
+    let size_only = matches.is_present("size");
+    let report_extra = matches.is_present("extra");
     let silent = matches.is_present("silent");
 
     let cts = CancellationTokenSource::new();
@@ -76,7 +90,15 @@ fn run() -> Result<(), Box<::std::error::Error>> {
     })
     .expect("Failed to set Ctrl-C handler.");
 
-    let mut processor = HashFileProcessor::new(hash_type, target_path, force_create);
+    let processor_options = HashFileProcessOptions {
+        base_path: String::from(target_path),
+        hash_type: Some(hash_type),
+        force_create: Some(force_create),
+        report_extra_files: Some(report_extra),
+        check_file_size_only: Some(size_only),
+        ..Default::default()
+    };
+    let mut processor = HashFileProcessor::new_with_options(processor_options);
 
     processor.set_error_event_handler(Box::new(|error| {
         eprintln!("{}: {:?}", error.file_path, error.state)
