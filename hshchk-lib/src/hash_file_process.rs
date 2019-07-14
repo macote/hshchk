@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use cancellation::CancellationToken;
+use regex::Regex;
 use strum::IntoEnumIterator;
 
 use crate::file_tree::{FileTree, FileTreeProcessor};
@@ -47,12 +48,14 @@ pub struct HashFileProcessProgressEventArgs {
 }
 
 #[derive(Default)]
-pub struct HashFileProcessOptions {
+pub struct HashFileProcessOptions<'a> {
     pub base_path: String,
     pub hash_type: Option<HashType>,
     pub force_create: Option<bool>,
     pub report_extra_files: Option<bool>,
     pub check_file_size_only: Option<bool>,
+    pub match_pattern: Option<&'a str>,
+    pub ignore_pattern: Option<&'a str>,
 }
 
 pub struct HashFileProcessor<'a> {
@@ -65,6 +68,8 @@ pub struct HashFileProcessor<'a> {
     base_path_len: usize,
     check_file_size_only: bool,
     report_extra_files: bool,
+    match_regex: Option<Regex>,
+    ignore_regex: Option<Regex>,
     error_count: usize,
     bytes_processed_notification_block_size: usize,
     cancellation_token: Option<Arc<CancellationToken>>,
@@ -112,6 +117,8 @@ impl<'a> HashFileProcessor<'a> {
             base_path_len: cano_base_path_str.len(),
             check_file_size_only: options.check_file_size_only.unwrap_or_default(),
             report_extra_files: options.report_extra_files.unwrap_or_default(),
+            match_regex: options.match_pattern.map(|s| Regex::new(s).unwrap()),
+            ignore_regex: options.ignore_pattern.map(|s| Regex::new(s).unwrap()),
             error_count: 0,
             bytes_processed_notification_block_size:
                 DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
@@ -121,7 +128,7 @@ impl<'a> HashFileProcessor<'a> {
             complete_event: None,
         }
     }
-    pub fn new(hash_type: HashType, base_path_str: &str, force_create: bool) -> Self {
+    pub fn new(base_path_str: &str, hash_type: HashType, force_create: bool) -> Self {
         HashFileProcessor::new_with_options(HashFileProcessOptions {
             base_path: String::from(base_path_str),
             hash_type: Some(hash_type),
@@ -179,14 +186,28 @@ impl<'a> HashFileProcessor<'a> {
             }
 
             self.hash_file.save(&self.hash_file_path);
-        } else if self.process_type == HashFileProcessType::Verify
-            && self.report_extra_files
-            && !self.hash_file.is_empty() {
+        } else if self.process_type == HashFileProcessType::Verify && !self.hash_file.is_empty() {
+            let mut error = false;
             for file_path in self.hash_file.get_file_paths() {
+                if let Some(regex) = &self.match_regex {
+                    if !regex.is_match(&file_path) {
+                        continue;
+                    }
+                }
+
+                if let Some(regex) = &self.ignore_regex {
+                    if regex.is_match(&file_path) {
+                        continue;
+                    }
+                }
+
+                error = true;
                 self.handle_error(&file_path, FileErrorState::Missing);
             }
 
-            return HashFileProcessResult::Error;
+            if error {
+                return HashFileProcessResult::Error;
+            }
         }
 
         HashFileProcessResult::Success
@@ -217,7 +238,6 @@ impl<'a> HashFileProcessor<'a> {
     ) {
         self.complete_event = Some(handler);
     }
-
     pub fn get_process_type(&self) -> HashFileProcessType {
         self.process_type
     }
@@ -228,6 +248,18 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
         let file_path_str = file_path.to_str().unwrap();
         if file_path_str == self.hash_file_path {
             return; // skip current hash file
+        }
+
+        if let Some(regex) = &self.match_regex {
+            if !regex.is_match(file_path_str) {
+                return;
+            }
+        }
+
+        if let Some(regex) = &self.ignore_regex {
+            if regex.is_match(file_path_str) {
+                return;
+            }
         }
 
         let relative_file_path = &file_path_str[(self.base_path_len + 1)..];
@@ -248,38 +280,36 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
             }
         } else if relative_file_path == self.bin_file_name {
             return; // skip app binary file
-        } else if self.process_type == HashFileProcessType::Verify {
+        } else if self.process_type == HashFileProcessType::Verify && self.report_extra_files {
             self.handle_error(relative_file_path, FileErrorState::Extra);
             return;
         }
 
         let mut digest = String::from("");
         if !(self.check_file_size_only && self.process_type == HashFileProcessType::Verify) {
-            {
-                let mut file_hasher = crate::get_file_hasher(self.hash_type, file_path_str);
-                if let Some(handler) = &self.progress_event {
-                    let file_path = relative_file_path.to_string();
+            let mut file_hasher = crate::get_file_hasher(self.hash_type, file_path_str);
+            if let Some(handler) = &self.progress_event {
+                let file_path = relative_file_path.to_string();
+                handler(HashFileProcessProgressEventArgs {
+                    relative_file_path: file_path.clone(),
+                    file_size,
+                    bytes_processed: 0,
+                });
+                file_hasher.set_bytes_processed_event_handler(Box::new(move |args| {
                     handler(HashFileProcessProgressEventArgs {
                         relative_file_path: file_path.clone(),
                         file_size,
-                        bytes_processed: 0,
+                        bytes_processed: args.bytes_processed,
                     });
-                    file_hasher.set_bytes_processed_event_handler(Box::new(move |args| {
-                        handler(HashFileProcessProgressEventArgs {
-                            relative_file_path: file_path.clone(),
-                            file_size,
-                            bytes_processed: args.bytes_processed,
-                        });
-                    }));
-                }
+                }));
+            }
 
-                let cancellation_token = self.cancellation_token.as_ref().unwrap();
-                file_hasher.compute(cancellation_token);
-                digest = file_hasher.digest();
+            let cancellation_token = self.cancellation_token.as_ref().unwrap();
+            file_hasher.compute(cancellation_token);
+            digest = file_hasher.digest();
 
-                if cancellation_token.is_canceled() {
-                    return;
-                }
+            if cancellation_token.is_canceled() {
+                return;
             }
         }
 

@@ -5,7 +5,9 @@ use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
 
 use cancellation::CancellationTokenSource;
 
-use hshchk_lib::hash_file_process::{HashFileProcessOptions, HashFileProcessResult, HashFileProcessor};
+use hshchk_lib::hash_file_process::{
+    HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
+};
 
 fn run() -> Result<(), Box<::std::error::Error>> {
     let app = App::new(crate_name!())
@@ -54,15 +56,29 @@ fn run() -> Result<(), Box<::std::error::Error>> {
                 .short("s")
                 .long("silent")
                 .help("Don't output to stdout"),
+        )
+        .arg(
+            Arg::with_name("match")
+                .short("m")
+                .long("match")
+                .takes_value(true)
+                .value_name("pattern")
+                .help("Process files that matches pattern"),
+        )
+        .arg(
+            Arg::with_name("ignore")
+                .short("i")
+                .long("ignore")
+                .takes_value(true)
+                .value_name("pattern")
+                .help("Ignore files that matches pattern"),
         );
 
     let matches = app.get_matches_safe()?;
-
     let target_path = match matches.value_of("directory") {
         Some(directory_name) => directory_name,
         None => ".",
     };
-
     let directory_path = Path::new(&target_path);
     if !directory_path.is_dir() {
         return Err(Box::new(Error::new(
@@ -71,16 +87,12 @@ fn run() -> Result<(), Box<::std::error::Error>> {
         )));
     }
 
-    let hash_type_arg = matches
-        .value_of("hashtype")
-        .unwrap_or("SHA1")
-        .to_uppercase();
-    let hash_type = hshchk_lib::get_hash_type_from_str(&hash_type_arg);
-    let force_create = matches.is_present("create");
-    let size_only = matches.is_present("size");
-    let report_extra = matches.is_present("extra");
-    let silent = matches.is_present("silent");
-
+    let hash_type = hshchk_lib::get_hash_type_from_str(
+        &matches
+            .value_of("hashtype")
+            .unwrap_or("SHA1")
+            .to_uppercase(),
+    );
     let cts = CancellationTokenSource::new();
     let main_cancellation_token = cts.token();
     let processor_cancellation_token = main_cancellation_token.clone();
@@ -90,21 +102,21 @@ fn run() -> Result<(), Box<::std::error::Error>> {
     })
     .expect("Failed to set Ctrl-C handler.");
 
-    let processor_options = HashFileProcessOptions {
+    let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: String::from(target_path),
         hash_type: Some(hash_type),
-        force_create: Some(force_create),
-        report_extra_files: Some(report_extra),
-        check_file_size_only: Some(size_only),
-        ..Default::default()
-    };
-    let mut processor = HashFileProcessor::new_with_options(processor_options);
+        force_create: Some(matches.is_present("create")),
+        report_extra_files: Some(matches.is_present("extra")),
+        check_file_size_only: Some(matches.is_present("size")),
+        match_pattern: matches.value_of("match"),
+        ignore_pattern: matches.value_of("ignore"),
+    });
 
     processor.set_error_event_handler(Box::new(|error| {
         eprintln!("{}: {:?}", error.file_path, error.state)
     }));
 
-    if !silent {
+    if !matches.is_present("silent") {
         processor.set_progress_event_handler(Box::new(|args| {
             println!(
                 "Processing {} ({}; {})",

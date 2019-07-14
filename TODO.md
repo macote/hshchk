@@ -1,8 +1,4 @@
-  - code
-    - HashFileProcessorOptions
   - features
-    - -i option: ignore pattern
-    - -m option: check pattern
     - -o option: output file
     - support (md5|sha1|etc.)sum file format
   - verbosity
@@ -13,9 +9,6 @@
     - defaults to progress output?
   - error handling
     - files inaccessible / in use
-  - reporting
-  	- defaults to stderr
-    - save to file
   - path vs path_str
   - unit tests
   - packaging
