@@ -1,16 +1,13 @@
+use crate::file_tree::{FileTree, FileTreeProcessor};
+use crate::hash_file::HashFile;
+use crate::HashType;
+use cancellation::CancellationToken;
+use regex::Regex;
 use std::env;
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
-
-use cancellation::CancellationToken;
-use regex::Regex;
 use strum::IntoEnumIterator;
-
-use crate::file_tree::{FileTree, FileTreeProcessor};
-use crate::hash_file::HashFile;
-use crate::HashType;
 
 static HASH_FILE_BASE_NAME: &str = "hshchk";
 
@@ -72,7 +69,7 @@ pub struct HashFileProcessor<'a> {
     ignore_regex: Option<Regex>,
     error_count: usize,
     bytes_processed_notification_block_size: usize,
-    cancellation_token: Option<Arc<CancellationToken>>,
+    cancellation_token: Option<&'a CancellationToken>,
     progress_event: Option<Box<Fn(HashFileProcessProgressEventArgs) + Send + Sync + 'a>>,
     error_event: Option<Box<Fn(FileErrorEntry) + Send + Sync + 'a>>,
     complete_event: Option<Box<Fn(HashFileProcessResult) + Send + Sync + 'a>>,
@@ -145,7 +142,13 @@ impl<'a> HashFileProcessor<'a> {
             });
         }
     }
-    pub fn process(&mut self, cancellation_token: Arc<CancellationToken>) -> HashFileProcessResult {
+    pub fn process(&mut self) -> HashFileProcessResult {
+        self.process_with_cancellation_token(CancellationToken::none())
+    }
+    pub fn process_with_cancellation_token(
+        &mut self,
+        cancellation_token: &'a CancellationToken,
+    ) -> HashFileProcessResult {
         let result = self.process_internal(cancellation_token);
         if let Some(handler) = &self.complete_event {
             handler(result);
@@ -155,9 +158,9 @@ impl<'a> HashFileProcessor<'a> {
     }
     pub fn process_internal(
         &mut self,
-        cancellation_token: Arc<CancellationToken>,
+        cancellation_token: &'a CancellationToken,
     ) -> HashFileProcessResult {
-        self.cancellation_token = Some(Arc::clone(&cancellation_token));
+        self.cancellation_token = Some(cancellation_token);
 
         if self.process_type == HashFileProcessType::Verify {
             self.hash_file.load(&self.hash_file_path);

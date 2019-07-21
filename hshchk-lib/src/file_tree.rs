@@ -1,8 +1,7 @@
+use cancellation::CancellationToken;
 use std::fs;
 use std::io::Result;
 use std::path::{Path, PathBuf};
-
-use cancellation::CancellationToken;
 
 pub trait FileTreeProcessor {
     fn process_file(&mut self, file_path: &PathBuf);

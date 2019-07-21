@@ -1,10 +1,7 @@
 use std::io::{Error, ErrorKind};
 use std::path::Path;
-
-use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
-
 use cancellation::CancellationTokenSource;
-
+use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
 use hshchk_lib::hash_file_process::{
     HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
 };
@@ -129,7 +126,7 @@ fn run() -> Result<(), Box<::std::error::Error>> {
         }));
     }
 
-    match processor.process(processor_cancellation_token) {
+    match processor.process_with_cancellation_token(&processor_cancellation_token) {
         HashFileProcessResult::Error => Err(Box::new(Error::new(
             ErrorKind::Other,
             "The hash check process failed.",

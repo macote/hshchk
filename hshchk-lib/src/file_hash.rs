@@ -1,7 +1,5 @@
 use std::io::{BufReader, Read};
-
 use digest::Digest;
-
 use crate::block_hasher::{BlockHasher, BytesProcessedEventArgs};
 use crate::open_file;
 

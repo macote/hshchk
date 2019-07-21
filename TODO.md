@@ -10,6 +10,6 @@
   - error handling
     - files inaccessible / in use
   - path vs path_str
-  - unit tests
+  - tests
   - packaging
   - release

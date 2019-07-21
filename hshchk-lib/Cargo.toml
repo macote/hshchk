@@ -27,3 +27,6 @@ regex = "1"
 [dependencies.clap]
 version = "2"
 features = ["suggestions", "color", "wrap_help"]
+
+[dev-dependencies]
+nanoid = "0.2"

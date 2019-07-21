@@ -1,3 +1,4 @@
+use crate::{create_file, open_file};
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::{
@@ -5,8 +6,6 @@ use std::io::{
     BufReader, BufWriter,
 };
 use std::path::MAIN_SEPARATOR;
-
-use crate::{create_file, open_file};
 
 pub struct FileEntry {
     pub file_path: String,
