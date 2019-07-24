@@ -1,10 +1,10 @@
 use cancellation::CancellationToken;
 use std::fs;
 use std::io::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub trait FileTreeProcessor {
-    fn process_file(&mut self, file_path: &PathBuf);
+    fn process_file(&mut self, file_path: &Path);
 }
 
 pub struct FileTree<'a, T: FileTreeProcessor> {
@@ -22,12 +22,11 @@ impl<'a, T: FileTreeProcessor> FileTree<'a, T> {
                     break;
                 }
 
-                let entry = entry?;
-                let path = entry.path();
+                let path = entry?.path();
                 if path.is_dir() {
                     self.traverse(&path, cancellation_token)?;
                 } else {
-                    self.processor.process_file(&entry.path());
+                    self.processor.process_file(&path);
                 }
             }
         }

@@ -1,10 +1,10 @@
-use std::io::{Error, ErrorKind};
-use std::path::Path;
 use cancellation::CancellationTokenSource;
 use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
 use hshchk_lib::hash_file_process::{
     HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
 };
+use std::io::{Error, ErrorKind};
+use std::path::Path;
 
 fn run() -> Result<(), Box<::std::error::Error>> {
     let app = App::new(crate_name!())

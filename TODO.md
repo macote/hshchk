@@ -8,8 +8,8 @@
       - overall
     - defaults to progress output?
   - error handling
-    - files inaccessible / in use
-  - path vs path_str
+    - inaccessible files and folders
+  - review Path, PathBuf and OsStr handling
   - tests
   - packaging
   - release

@@ -1,7 +1,7 @@
-use std::io::{BufReader, Read};
-use digest::Digest;
 use crate::block_hasher::{BlockHasher, BytesProcessedEventArgs};
 use crate::open_file;
+use digest::Digest;
+use std::io::{BufReader, Read};
 
 pub struct FileHash<'a, T: Digest> {
     reader: BufReader<std::fs::File>,

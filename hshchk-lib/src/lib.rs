@@ -9,11 +9,11 @@ use std::fs::File;
 use std::path::Path;
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
-pub mod hash_file_process;
 mod block_hasher;
 mod file_hash;
 mod file_tree;
 mod hash_file;
+pub mod hash_file_process;
 
 #[derive(Copy, Clone, PartialEq, Debug, EnumString, EnumIter, IntoStaticStr)]
 pub enum HashType {
@@ -26,12 +26,7 @@ pub enum HashType {
 }
 
 pub fn get_hash_types() -> Vec<&'static str> {
-    let mut types: Vec<&'static str> = Vec::new();
-    for hash_type in HashType::iter() {
-        types.push(hash_type.into());
-    }
-
-    types
+    HashType::iter().map(|ht| ht.into()).collect()
 }
 
 pub fn get_hash_type_from_str(type_str: &str) -> HashType {
@@ -40,22 +35,16 @@ pub fn get_hash_type_from_str(type_str: &str) -> HashType {
 
 fn open_file(file_path: &str) -> File {
     let path = Path::new(file_path);
-    let path_displayable = path.display();
     match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {}", path_displayable, why.description()),
+        Err(why) => panic!("couldn't open {}: {}", path.display(), why.description()),
         Ok(file) => file,
     }
 }
 
 fn create_file(file_path: &str) -> File {
     let path = Path::new(file_path);
-    let path_displayable = path.display();
     match File::create(&path) {
-        Err(why) => panic!(
-            "couldn't create {}: {}",
-            path_displayable,
-            why.description()
-        ),
+        Err(why) => panic!("couldn't create {}: {}", path.display(), why.description()),
         Ok(file) => file,
     }
 }
@@ -103,33 +92,45 @@ mod tests {
     use super::*;
     use cancellation::CancellationToken;
     use std::fs;
-    use std::fs::File;
 
     // block hasher
 
     // file hash
     #[test]
-    fn empty_file() {
-        let d = test::create_tmp_dir();
-        let mut f = d.clone();
-        f.push("file");
-        File::create(&f).expect("failed to create");
-        let mut fh = get_md5_file_hasher(f.to_str().unwrap());
-        fh.compute(CancellationToken::none());
-        let digest = fh.digest();
-        assert_eq!(digest, "d41d8cd98f00b204e9800998ecf8427e");
+    fn file_hash_bytes_processed_event_handler_undefined() {
+        let file = test::create_tmp_file("");
+        let file_hash: FileHash<Md5> = FileHash::new(file.to_str().unwrap());
+        assert_eq!(file_hash.is_bytes_processed_event_handler_defined(), false);
+        fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
     }
 
     #[test]
-    fn data_file() {
-        let d = test::create_tmp_dir();
-        let mut f = d.clone();
-        f.push("file");
-        fs::write(&f, "data").expect("failed to write");
-        let mut fh = get_md5_file_hasher(f.to_str().unwrap());
-        fh.compute(CancellationToken::none());
-        let digest = fh.digest();
+    fn file_hash_bytes_processed_event_handler_defined() {
+        let file = test::create_tmp_file("");
+        let mut file_hash: FileHash<Md5> = FileHash::new(file.to_str().unwrap());
+        file_hash.set_bytes_processed_event_handler(Box::new(move |_args| {}));
+        assert_eq!(file_hash.is_bytes_processed_event_handler_defined(), true);
+        fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
+    }
+
+    #[test]
+    fn file_hash_empty_file() {
+        let file = test::create_tmp_file("");
+        let mut file_hash = get_md5_file_hasher(file.to_str().unwrap());
+        file_hash.compute(CancellationToken::none());
+        let digest = file_hash.digest();
+        assert_eq!(digest, "d41d8cd98f00b204e9800998ecf8427e");
+        fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
+    }
+
+    #[test]
+    fn file_hash_data_file() {
+        let file = test::create_tmp_file("data");
+        let mut file_hash = get_md5_file_hasher(file.to_str().unwrap());
+        file_hash.compute(CancellationToken::none());
+        let digest = file_hash.digest();
         assert_eq!(digest, "8d777f385d3dfec8815d20f7496026dc");
+        fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
     }
 
     // hash file

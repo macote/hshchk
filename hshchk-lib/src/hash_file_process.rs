@@ -6,7 +6,7 @@ use regex::Regex;
 use std::env;
 use std::error::Error;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 
 static HASH_FILE_BASE_NAME: &str = "hshchk";
@@ -247,7 +247,7 @@ impl<'a> HashFileProcessor<'a> {
 }
 
 impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
-    fn process_file(&mut self, file_path: &PathBuf) {
+    fn process_file(&mut self, file_path: &Path) {
         let file_path_str = file_path.to_str().unwrap();
         if file_path_str == self.hash_file_path {
             return; // skip current hash file
