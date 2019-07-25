@@ -1,0 +1,76 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "(cppvsdbg) Debug executable 'hshchk.exe'",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceRoot}/target/debug/${workspaceRootFolderName}.exe",
+            "args": [ "${workspaceFolder}/hshchk-lib" ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "(lldb) Debug unit tests in library 'hshchk-lib'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=hshchk-lib"
+                ],
+                "filter": {
+                    "name": "hshchk-lib",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "(lldb) Debug integration test 'hash_file_process'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=hash_file_process",
+                    "--package=hshchk-lib"
+                ],
+                "filter": {
+                    "name": "hash_file_process",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "(lldb) Debug executable 'hshchk'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=hshchk",
+                    "--package=hshchk"
+                ],
+                "filter": {
+                    "name": "hshchk",
+                    "kind": "bin"
+                }
+            },
+            "args": [ "${workspaceFolder}/hshchk-lib" ],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

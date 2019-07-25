@@ -1,15 +1,16 @@
-  - features
-    - -o option: output file
-    - support (md5|sha1|etc.)sum file format
-  - verbosity
-    - progress loop
-      - filetree updates
-      - block updates
-      - overall
-    - defaults to progress output?
-  - error handling
-    - inaccessible files and folders
-  - review Path, PathBuf and OsStr handling
-  - tests
-  - packaging
-  - release
+- use (md5|sha1|etc.)sum file format by default
+  - stay backward compatible with x|y|z format
+- features
+  - -o option: output file
+  - support (md5|sha1|etc.)sum files
+- verbosity
+  - progress loop
+    - filetree updates
+    - block updates
+    - overall
+  - defaults to progress output?
+- error handling
+  - inaccessible files and folders
+- tests
+- packaging
+- release

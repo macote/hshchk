@@ -4,7 +4,7 @@ use hshchk_lib::hash_file_process::{
     HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
 };
 use std::io::{Error, ErrorKind};
-use std::path::Path;
+use std::path::PathBuf;
 
 fn run() -> Result<(), Box<::std::error::Error>> {
     let app = App::new(crate_name!())
@@ -72,12 +72,12 @@ fn run() -> Result<(), Box<::std::error::Error>> {
         );
 
     let matches = app.get_matches_safe()?;
-    let target_path = match matches.value_of("directory") {
-        Some(directory_name) => directory_name,
+    let directory = match matches.value_of("directory") {
+        Some(directory) => directory,
         None => ".",
     };
-    let directory_path = Path::new(&target_path);
-    if !directory_path.is_dir() {
+    let target_path = PathBuf::from(&directory);
+    if !target_path.is_dir() {
         return Err(Box::new(Error::new(
             ErrorKind::Other,
             "The specified directory doesn't exist.",
@@ -100,7 +100,7 @@ fn run() -> Result<(), Box<::std::error::Error>> {
     .expect("Failed to set Ctrl-C handler.");
 
     let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
-        base_path: String::from(target_path),
+        base_path: target_path,
         hash_type: Some(hash_type),
         force_create: Some(matches.is_present("create")),
         report_extra_files: Some(matches.is_present("extra")),
@@ -110,14 +110,20 @@ fn run() -> Result<(), Box<::std::error::Error>> {
     });
 
     processor.set_error_event_handler(Box::new(|error| {
-        eprintln!("{}: {:?}", error.file_path, error.state)
+        eprintln!("{} => {:?}", error.file_path.display(), error.state)
+    }));
+
+    processor.set_warning_event_handler(Box::new(|warning| {
+        eprintln!("{} => {:?}", warning.file_path.display(), warning.state)
     }));
 
     if !matches.is_present("silent") {
         processor.set_progress_event_handler(Box::new(|args| {
             println!(
                 "Processing {} ({}; {})",
-                args.relative_file_path, args.file_size, args.bytes_processed
+                args.file_path.display(),
+                args.file_size,
+                args.bytes_processed
             );
         }));
         let process_type = processor.get_process_type();

@@ -1,6 +1,6 @@
 use cancellation::CancellationToken;
 
-pub struct BytesProcessedEventArgs {
+pub struct HashProgress {
     pub bytes_processed: usize,
 }
 
@@ -10,16 +10,16 @@ pub trait BlockHasher<'a> {
     fn digest(&mut self) -> String;
     fn set_bytes_processed_event_handler(
         &mut self,
-        handler: Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>,
+        handler: Box<Fn(HashProgress) + Send + Sync + 'a>,
     );
     fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
         &mut self,
-        handler: Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>,
+        handler: Box<Fn(HashProgress) + Send + Sync + 'a>,
         bytes_processed_notification_block_size: usize,
     );
     fn bytes_processed_notification_block_size(&self) -> usize;
     fn is_bytes_processed_event_handler_defined(&self) -> bool;
-    fn handle_bytes_processed_event(&self, args: BytesProcessedEventArgs);
+    fn handle_bytes_processed_event(&self, args: HashProgress);
     fn compute(&mut self, cancellation_token: &CancellationToken) {
         let mut bytes_read;
         let mut running_notification_block_size = 0usize;
@@ -47,9 +47,7 @@ pub trait BlockHasher<'a> {
                                 bytes_processed_notification_block_size;
                         }
 
-                        self.handle_bytes_processed_event(BytesProcessedEventArgs {
-                            bytes_processed,
-                        });
+                        self.handle_bytes_processed_event(HashProgress { bytes_processed });
                     }
                 }
             } else {

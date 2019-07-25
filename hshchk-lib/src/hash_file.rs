@@ -5,16 +5,19 @@ use std::io::{
     prelude::{BufRead, Write},
     BufReader, BufWriter,
 };
-use std::path::MAIN_SEPARATOR;
+use std::path::{Path, MAIN_SEPARATOR};
 
-pub struct FileEntry {
+// `hshchk-lib` supports well-formed Unicode file names only.
+// this is why paths are stored using `String` instead of `Path`.
+// files having ill-formed Unicode file names are not processed.
+pub struct HashFileEntry {
     pub file_path: String,
     pub size: u64,
     pub digest: String,
 }
 
 pub struct HashFile {
-    files: HashMap<String, FileEntry>,
+    files: HashMap<String, HashFileEntry>,
 }
 
 impl HashFile {
@@ -24,7 +27,7 @@ impl HashFile {
         }
     }
 
-    pub fn load(&mut self, file_path: &str) {
+    pub fn load(&mut self, file_path: &Path) {
         let file = open_file(file_path);
         let reader = BufReader::new(file);
         let file_separator = replaceable_separator();
@@ -42,7 +45,7 @@ impl HashFile {
         }
     }
 
-    pub fn save(&self, file_path: &str) {
+    pub fn save(&self, file_path: &Path) {
         let file = create_file(&file_path);
         let mut writer = BufWriter::new(&file);
         for file_entry in self.files.values() {
@@ -54,7 +57,11 @@ impl HashFile {
                 &file_entry.digest
             ));
             if let Err(why) = writer.write(line.as_bytes()) {
-                panic!("couldn't write to {}: {}", file_path, why.description())
+                panic!(
+                    "couldn't write to {}: {}",
+                    file_path.display(),
+                    why.description()
+                )
             };
         }
     }
@@ -62,8 +69,8 @@ impl HashFile {
     pub fn add_entry(&mut self, file_path: &str, size: u64, digest: &str) {
         self.files.insert(
             file_path.into(),
-            FileEntry {
-                file_path: String::from(file_path),
+            HashFileEntry {
+                file_path: file_path.to_owned(),
                 size,
                 digest: digest.into(),
             },
@@ -74,7 +81,7 @@ impl HashFile {
         self.files.remove(file_path);
     }
 
-    pub fn get_entry(&self, file_path: &str) -> Option<&FileEntry> {
+    pub fn get_entry(&self, file_path: &str) -> Option<&HashFileEntry> {
         self.files.get(file_path)
     }
 

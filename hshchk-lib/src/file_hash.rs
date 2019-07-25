@@ -1,14 +1,15 @@
-use crate::block_hasher::{BlockHasher, BytesProcessedEventArgs};
+use crate::block_hasher::{BlockHasher, HashProgress};
 use crate::open_file;
 use digest::Digest;
 use std::io::{BufReader, Read};
+use std::path::Path;
 
 pub struct FileHash<'a, T: Digest> {
     reader: BufReader<std::fs::File>,
     hasher: T,
     buffer: Vec<u8>,
     buffer_size: usize,
-    bytes_processed_event: Option<Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>>,
+    bytes_processed_event: Option<Box<Fn(HashProgress) + Send + Sync + 'a>>,
     bytes_processed_notification_block_size: usize,
 }
 
@@ -16,7 +17,7 @@ const DEFAULT_BUFFER_SIZE: usize = 1_048_576;
 const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2_097_152;
 
 impl<'a, T: Digest> FileHash<'a, T> {
-    pub fn new_with_buffer_size(file_path: &str, buffer_size: usize) -> Self {
+    pub fn new_with_buffer_size(file_path: &Path, buffer_size: usize) -> Self {
         FileHash {
             reader: BufReader::new(open_file(&file_path)),
             hasher: T::new(),
@@ -26,7 +27,7 @@ impl<'a, T: Digest> FileHash<'a, T> {
             bytes_processed_notification_block_size: 0,
         }
     }
-    pub fn new(file_path: &str) -> Self {
+    pub fn new(file_path: &Path) -> Self {
         FileHash::new_with_buffer_size(file_path, DEFAULT_BUFFER_SIZE)
     }
 }
@@ -45,7 +46,7 @@ impl<'a, T: Digest> BlockHasher<'a> for FileHash<'a, T> {
     }
     fn set_bytes_processed_event_handler(
         &mut self,
-        handler: Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>,
+        handler: Box<Fn(HashProgress) + Send + Sync + 'a>,
     ) {
         self.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
             handler,
@@ -54,7 +55,7 @@ impl<'a, T: Digest> BlockHasher<'a> for FileHash<'a, T> {
     }
     fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
         &mut self,
-        handler: Box<Fn(BytesProcessedEventArgs) + Send + Sync + 'a>,
+        handler: Box<Fn(HashProgress) + Send + Sync + 'a>,
         bytes_processed_notification_block_size: usize,
     ) {
         self.bytes_processed_event = Some(handler);
@@ -66,7 +67,7 @@ impl<'a, T: Digest> BlockHasher<'a> for FileHash<'a, T> {
     fn bytes_processed_notification_block_size(&self) -> usize {
         self.bytes_processed_notification_block_size
     }
-    fn handle_bytes_processed_event(&self, args: BytesProcessedEventArgs) {
+    fn handle_bytes_processed_event(&self, args: HashProgress) {
         match &self.bytes_processed_event {
             Some(handler) => handler(args),
             None => (),
