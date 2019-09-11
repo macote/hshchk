@@ -79,7 +79,7 @@ fn get_blake2s_file_hasher(file_path: &Path) -> FileHash<Blake2s> {
     FileHash::new(file_path)
 }
 
-fn get_file_hasher<'a>(hash_type: HashType, file_path: &'a Path) -> Box<BlockHasher + 'a> {
+fn get_file_hasher<'a>(hash_type: HashType, file_path: &'a Path) -> Box<dyn BlockHasher + 'a> {
     match hash_type {
         HashType::MD5 => Box::new(get_md5_file_hasher(file_path)),
         HashType::SHA1 => Box::new(get_sha1_file_hasher(file_path)),
@@ -136,6 +136,26 @@ mod tests {
         file_hash.compute(CancellationToken::none());
         let digest = file_hash.digest();
         assert_eq!(digest, "8d777f385d3dfec8815d20f7496026dc");
+        fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
+    }
+
+    #[test]
+    fn file_hash_data_two_blocks() {
+        // TODO: fix this test
+        let file = test::create_tmp_file("datadata");
+        let mut file_hash = get_md5_file_hasher(&file);
+        //let (tx, rx) = mpsc::channel();
+        //let mut a = 0u32;
+        {
+            file_hash.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(Box::new(|_args| {
+                //a = a + 1;
+                //let val = String::from("hi");
+                //tx.send(val.clone()).unwrap();
+            }), 4);
+            file_hash.compute(CancellationToken::none());
+        }
+        let digest = file_hash.digest();
+        assert_eq!(digest, "511ae0b1c13f95e5f08f1a0dd3da3d93");
         fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
     }
 

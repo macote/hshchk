@@ -6,7 +6,7 @@ use hshchk_lib::hash_file_process::{
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 
-fn run() -> Result<(), Box<::std::error::Error>> {
+fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     let app = App::new(crate_name!())
         .setting(AppSettings::ColorAuto)
         .setting(AppSettings::ColoredHelp)
@@ -140,6 +140,10 @@ fn run() -> Result<(), Box<::std::error::Error>> {
         HashFileProcessResult::Canceled => Err(Box::new(Error::new(
             ErrorKind::Interrupted,
             "The hash check process was canceled.",
+        ))),
+        HashFileProcessResult::NoFilesProcessed => Err(Box::new(Error::new(
+            ErrorKind::NotFound,
+            "No files were processed.",
         ))),
         HashFileProcessResult::Success => Ok(()),
     }

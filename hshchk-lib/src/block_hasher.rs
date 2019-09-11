@@ -10,11 +10,11 @@ pub trait BlockHasher<'a> {
     fn digest(&mut self) -> String;
     fn set_bytes_processed_event_handler(
         &mut self,
-        handler: Box<Fn(HashProgress) + Send + Sync + 'a>,
+        handler: Box<dyn Fn(HashProgress) + Send + Sync + 'a>,
     );
     fn set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
         &mut self,
-        handler: Box<Fn(HashProgress) + Send + Sync + 'a>,
+        handler: Box<dyn Fn(HashProgress) + Send + Sync + 'a>,
         bytes_processed_notification_block_size: usize,
     );
     fn bytes_processed_notification_block_size(&self) -> usize;
