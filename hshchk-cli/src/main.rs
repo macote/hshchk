@@ -1,5 +1,6 @@
 use cancellation::CancellationTokenSource;
 use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
+use num_format::{Locale, ToFormattedString};
 use hshchk_lib::hash_file_process::{
     HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
 };
@@ -119,12 +120,13 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
 
     if !matches.is_present("silent") {
         processor.set_progress_event_handler(Box::new(|args| {
-            println!(
-                "Processing {} ({}; {})",
-                args.file_path.display(),
-                args.file_size,
-                args.bytes_processed
-            );
+            if args.bytes_processed == 0 {
+                println!(
+                    "Processing {} ({})",
+                    args.file_path.display(),
+                    args.file_size.to_formatted_string(&Locale::en)
+                );
+            }
         }));
         let process_type = processor.get_process_type();
         processor.set_complete_event_handler(Box::new(move |result| {

@@ -147,11 +147,15 @@ mod tests {
         //let (tx, rx) = mpsc::channel();
         //let mut a = 0u32;
         {
-            file_hash.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(Box::new(|_args| {
-                //a = a + 1;
-                //let val = String::from("hi");
-                //tx.send(val.clone()).unwrap();
-            }), 4);
+            file_hash
+                .set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
+                    Box::new(|_args| {
+                        //a = a + 1;
+                        //let val = String::from("hi");
+                        //tx.send(val.clone()).unwrap();
+                    }),
+                    4,
+                );
             file_hash.compute(CancellationToken::none());
         }
         let digest = file_hash.digest();

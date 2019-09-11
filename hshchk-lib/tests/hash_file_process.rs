@@ -4,7 +4,7 @@ use hshchk_lib::hash_file_process::{
 use hshchk_lib::HashType;
 use std::fs;
 
-#[path="../src/test/mod.rs"]
+#[path = "../src/test/mod.rs"]
 mod test;
 
 static FILE_DATA_CHECKSUM: &str = "file|4|a17c9aaa61e80a1bf71d0d850af4e5baa9800bbd\n";

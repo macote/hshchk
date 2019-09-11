@@ -224,8 +224,7 @@ impl<'a> HashFileProcessor<'a> {
 
         if self.files_processed {
             HashFileProcessResult::Success
-        }
-        else {
+        } else {
             HashFileProcessResult::NoFilesProcessed
         }
     }
@@ -317,8 +316,10 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
             }
         } else if relative_file_path == self.bin_file_name {
             return; // skip app binary file
-        } else if self.process_type == HashFileProcessType::Verify && self.report_extra_files {
-            self.handle_warning(relative_file_path, FileProcessState::Extra);
+        } else if self.process_type == HashFileProcessType::Verify {
+            if self.report_extra_files {
+                self.handle_warning(relative_file_path, FileProcessState::Extra);
+            }
             return;
         }
 
