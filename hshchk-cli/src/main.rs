@@ -1,9 +1,9 @@
 use cancellation::CancellationTokenSource;
 use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
-use num_format::{Locale, ToFormattedString};
 use hshchk_lib::hash_file_process::{
     HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
 };
+use num_format::{Locale, ToFormattedString};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 

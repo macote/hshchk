@@ -72,10 +72,10 @@ pub struct HashFileProcessor<'a> {
     files_processed: bool,
     bytes_processed_notification_block_size: usize,
     cancellation_token: Option<&'a CancellationToken>,
-    progress_event: Option<Box<dyn Fn(ProcessProgress) + Send + Sync + 'a>>,
-    warning_event: Option<Box<dyn Fn(FileProcessEntry) + Send + Sync + 'a>>,
-    error_event: Option<Box<dyn Fn(FileProcessEntry) + Send + Sync + 'a>>,
-    complete_event: Option<Box<dyn Fn(HashFileProcessResult) + Send + Sync + 'a>>,
+    progress_event: Option<Box<dyn Fn(ProcessProgress) + 'a>>,
+    warning_event: Option<Box<dyn Fn(FileProcessEntry) + 'a>>,
+    error_event: Option<Box<dyn Fn(FileProcessEntry) + 'a>>,
+    complete_event: Option<Box<dyn Fn(HashFileProcessResult) + 'a>>,
 }
 
 const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2_097_152;
@@ -228,10 +228,7 @@ impl<'a> HashFileProcessor<'a> {
             HashFileProcessResult::NoFilesProcessed
         }
     }
-    pub fn set_progress_event_handler(
-        &mut self,
-        handler: Box<dyn Fn(ProcessProgress) + Send + Sync + 'a>,
-    ) {
+    pub fn set_progress_event_handler(&mut self, handler: Box<dyn Fn(ProcessProgress) + 'a>) {
         self.set_progress_event_handler_with_bytes_processed_notification_block_size(
             handler,
             DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
@@ -239,28 +236,19 @@ impl<'a> HashFileProcessor<'a> {
     }
     pub fn set_progress_event_handler_with_bytes_processed_notification_block_size(
         &mut self,
-        handler: Box<dyn Fn(ProcessProgress) + Send + Sync + 'a>,
+        handler: Box<dyn Fn(ProcessProgress) + 'a>,
         bytes_processed_notification_block_size: usize,
     ) {
         self.progress_event = Some(handler);
         self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
     }
-    pub fn set_warning_event_handler(
-        &mut self,
-        handler: Box<dyn Fn(FileProcessEntry) + Send + Sync + 'a>,
-    ) {
+    pub fn set_warning_event_handler(&mut self, handler: Box<dyn Fn(FileProcessEntry) + 'a>) {
         self.warning_event = Some(handler);
     }
-    pub fn set_error_event_handler(
-        &mut self,
-        handler: Box<dyn Fn(FileProcessEntry) + Send + Sync + 'a>,
-    ) {
+    pub fn set_error_event_handler(&mut self, handler: Box<dyn Fn(FileProcessEntry) + 'a>) {
         self.error_event = Some(handler);
     }
-    pub fn set_complete_event_handler(
-        &mut self,
-        handler: Box<dyn Fn(HashFileProcessResult) + Send + Sync + 'a>,
-    ) {
+    pub fn set_complete_event_handler(&mut self, handler: Box<dyn Fn(HashFileProcessResult) + 'a>) {
         self.complete_event = Some(handler);
     }
     pub fn get_process_type(&self) -> HashFileProcessType {

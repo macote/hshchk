@@ -98,6 +98,7 @@ mod tests {
     use super::*;
     use cancellation::CancellationToken;
     use std::fs;
+    use std::sync::mpsc::{channel, Receiver, Sender};
 
     // block hasher
 
@@ -141,30 +142,25 @@ mod tests {
 
     #[test]
     fn file_hash_data_two_blocks() {
-        // TODO: fix this test
         let file = test::create_tmp_file("datadata");
-        let mut file_hash = get_md5_file_hasher(&file);
-        //let (tx, rx) = mpsc::channel();
-        //let mut a = 0u32;
-        {
-            file_hash
-                .set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
-                    Box::new(|_args| {
-                        //a = a + 1;
-                        //let val = String::from("hi");
-                        //tx.send(val.clone()).unwrap();
-                    }),
-                    4,
-                );
-            file_hash.compute(CancellationToken::none());
-        }
+        let mut file_hash: FileHash<Md5> = FileHash::new_with_buffer_size(&file, 2);
+        let (sender, receiver): (Sender<usize>, Receiver<usize>) = channel();
+        file_hash.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
+            Box::new(move |args| {
+                sender.send(args.bytes_processed).unwrap();
+            }),
+            4,
+        );
+        file_hash.compute(CancellationToken::none());
         let digest = file_hash.digest();
         assert_eq!(digest, "511ae0b1c13f95e5f08f1a0dd3da3d93");
+        assert_eq!(Ok(4), receiver.recv());
+        assert_eq!(Ok(8), receiver.recv());
+        assert!(receiver.try_recv().is_err());
         fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
     }
 
     // hash file
 
     // hash file process
-
 }
