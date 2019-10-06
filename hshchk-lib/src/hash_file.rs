@@ -7,9 +7,12 @@ use std::io::{
 };
 use std::path::{Path, MAIN_SEPARATOR};
 
+const MAX_PATH_SIZE: usize = 4_096 - 1;
+const MAX_HASH_SIZE: usize = 256;
+
 // `hshchk-lib` supports well-formed Unicode file names only.
-// this is why paths are stored using `String` instead of `Path`.
-// files having ill-formed Unicode file names are not processed.
+// This is why paths are stored using `String` instead of `Path`.
+// Files having ill-formed Unicode file names are not processed.
 pub struct HashFileEntry {
     pub file_path: String,
     pub size: u64,
@@ -37,11 +40,22 @@ impl HashFile {
             let split = content.split('|');
             let parts: Vec<&str> = split.collect();
             let file_name = parts[0].replace(file_separator, os_separator);
-            self.add_entry(
-                &file_name,
-                parts[1].parse::<u64>().unwrap(),
-                &parts[2].to_lowercase(),
-            );
+            if file_name.len() > MAX_PATH_SIZE {
+                panic!(
+                    "File path length must be less than {} characters.",
+                    MAX_PATH_SIZE + 1
+                );
+            }
+
+            if parts[2].len() > MAX_HASH_SIZE {
+                panic!(
+                    "Hash length must be less than {} characters.",
+                    MAX_HASH_SIZE + 1
+                );
+            }
+
+            let size = parts[1].parse::<u64>().expect("Failed to parse file size");
+            self.add_entry(&file_name, size, &parts[2].to_lowercase());
         }
     }
 
@@ -58,7 +72,7 @@ impl HashFile {
             ));
             if let Err(why) = writer.write(line.as_bytes()) {
                 panic!(
-                    "couldn't write to {}: {}",
+                    "Couldn't write to {}: {}.",
                     file_path.display(),
                     why.description()
                 )

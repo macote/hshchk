@@ -36,7 +36,7 @@ pub fn get_hash_type_from_str(type_str: &str) -> HashType {
 fn open_file(file_path: &Path) -> File {
     match File::open(file_path) {
         Err(why) => panic!(
-            "couldn't open {}: {}",
+            "Couldn't open {}: {}.",
             file_path.display(),
             why.description()
         ),
@@ -47,7 +47,7 @@ fn open_file(file_path: &Path) -> File {
 fn create_file(file_path: &Path) -> File {
     match File::create(file_path) {
         Err(why) => panic!(
-            "couldn't create {}: {}",
+            "Couldn't create {}: {}.",
             file_path.display(),
             why.description()
         ),
@@ -96,9 +96,10 @@ mod test;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hash_file::HashFile;
     use cancellation::CancellationToken;
     use std::fs;
-    use std::sync::mpsc::{channel, Receiver, Sender};
+    use std::sync::mpsc::channel;
 
     // block hasher
 
@@ -108,7 +109,7 @@ mod tests {
         let file = test::create_tmp_file("");
         let file_hash: FileHash<Md5> = FileHash::new(&file);
         assert_eq!(file_hash.is_bytes_processed_event_handler_defined(), false);
-        fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
+        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
     #[test]
@@ -117,7 +118,7 @@ mod tests {
         let mut file_hash: FileHash<Md5> = FileHash::new(&file);
         file_hash.set_bytes_processed_event_handler(Box::new(move |_args| {}));
         assert_eq!(file_hash.is_bytes_processed_event_handler_defined(), true);
-        fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
+        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
     #[test]
@@ -127,7 +128,7 @@ mod tests {
         file_hash.compute(CancellationToken::none());
         let digest = file_hash.digest();
         assert_eq!(digest, "d41d8cd98f00b204e9800998ecf8427e");
-        fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
+        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
     #[test]
@@ -137,14 +138,14 @@ mod tests {
         file_hash.compute(CancellationToken::none());
         let digest = file_hash.digest();
         assert_eq!(digest, "8d777f385d3dfec8815d20f7496026dc");
-        fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
+        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
     #[test]
     fn file_hash_data_two_blocks() {
         let file = test::create_tmp_file("datadata");
         let mut file_hash: FileHash<Md5> = FileHash::new_with_buffer_size(&file, 2);
-        let (sender, receiver): (Sender<usize>, Receiver<usize>) = channel();
+        let (sender, receiver) = channel();
         file_hash.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
             Box::new(move |args| {
                 sender.send(args.bytes_processed).unwrap();
@@ -157,10 +158,122 @@ mod tests {
         assert_eq!(Ok(4), receiver.recv());
         assert_eq!(Ok(8), receiver.recv());
         assert!(receiver.try_recv().is_err());
-        fs::remove_dir_all(file.parent().unwrap()).expect("failed to remove dir");
+        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
     // hash file
+
+    #[test]
+    fn hash_file_load_single() {
+        let file = test::create_tmp_file("filename|0|hash");
+        let mut hash_file = HashFile::new();
+        hash_file.load(&file);
+        assert_eq!(1, hash_file.get_file_paths().len());
+        let entry = hash_file.get_entry("filename").unwrap();
+        assert_eq!(0, entry.size);
+        assert_eq!("hash", entry.digest);
+        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
+    }
+
+    #[test]
+    fn hash_file_load_multiple() {
+        let file = test::create_tmp_file("filename1|1|hash1\r\nfilename2|2|hash2");
+        let mut hash_file = HashFile::new();
+        hash_file.load(&file);
+        assert_eq!(2, hash_file.get_file_paths().len());
+        let entry = hash_file.get_entry("filename1").unwrap();
+        assert_eq!(1, entry.size);
+        assert_eq!("hash1", entry.digest);
+        let entry = hash_file.get_entry("filename2").unwrap();
+        assert_eq!(2, entry.size);
+        assert_eq!("hash2", entry.digest);
+        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
+    }
+
+    #[test]
+    fn hash_file_load_failed_size() {
+        let file = test::create_tmp_file("filename|size|hash");
+        let file_clone = file.clone();
+        let mut hash_file = HashFile::new();
+        assert_eq!(
+            std::panic::catch_unwind(move || {
+                hash_file.load(&file_clone);
+            })
+            .err()
+            .and_then(|a| a
+                .downcast_ref::<String>()
+                .map(|s| { &s[..25] == "Failed to parse file size" })),
+            Some(true)
+        );
+        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
+    }
+
+    #[test]
+    fn hash_file_load_failed_filename() {
+        let file = test::create_tmp_file(&("a".repeat(4096) + "|0|hash"));
+        let file_clone = file.clone();
+        let mut hash_file = HashFile::new();
+        assert_eq!(
+            std::panic::catch_unwind(move || {
+                hash_file.load(&file_clone);
+            })
+            .err()
+            .and_then(|a| a
+                .downcast_ref::<String>()
+                .map(|s| { s == "File path length must be less than 4096 characters." })),
+            Some(true)
+        );
+        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
+    }
+
+    #[test]
+    fn hash_file_load_failed_hash() {
+        let file = test::create_tmp_file(&(String::from("filename|0|") + &"a".repeat(257)));
+        let file_clone = file.clone();
+        let mut hash_file = HashFile::new();
+        assert_eq!(
+            std::panic::catch_unwind(move || {
+                hash_file.load(&file_clone);
+            })
+            .err()
+            .and_then(|a| a
+                .downcast_ref::<String>()
+                .map(|s| { s == "Hash length must be less than 257 characters." })),
+            Some(true)
+        );
+        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
+    }
+
+    #[test]
+    fn hash_file_is_empty() {
+        let hash_file = HashFile::new();
+        assert!(hash_file.is_empty());
+    }
+
+    #[test]
+    fn hash_file_is_not_empty() {
+        let mut hash_file = HashFile::new();
+        hash_file.add_entry("filename", 0, "hash");
+        assert!(!hash_file.is_empty());
+    }
+
+    #[test]
+    fn hash_file_get_file_paths() {
+        let mut hash_file = HashFile::new();
+        hash_file.add_entry("filename1", 1, "hash1");
+        hash_file.add_entry("filename2", 2, "hash2");
+        let mut filenames = hash_file.get_file_paths();
+        filenames.sort();
+        assert_eq!("filename1filename2", filenames.join(""));
+    }
+
+    #[test]
+    fn hash_file_remove_entry() {
+        let mut hash_file = HashFile::new();
+        hash_file.add_entry("filename", 0, "hash");
+        hash_file.remove_entry("filename");
+        assert!(hash_file.is_empty());
+    }
 
     // hash file process
 }

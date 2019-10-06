@@ -10,26 +10,28 @@ use std::path::{Path, PathBuf};
 pub fn create_tmp_dir() -> PathBuf {
     let mut dir = env::temp_dir();
     dir.push(nanoid::simple());
-    fs::create_dir(dir.clone()).expect("failed to create dir");
+    fs::create_dir(dir.clone()).expect("Failed to create temp directory.");
     dir
 }
 
 pub fn create_tmp_file(data: &str) -> PathBuf {
     let dir = create_tmp_dir();
-    create_named_file(&dir, &nanoid::simple(), data)
+    create_file_with_content(&dir, &nanoid::simple(), data)
 }
 
-pub fn create_named_file(dir: &PathBuf, name: &str, data: &str) -> PathBuf {
+pub fn create_file_with_content(dir: &PathBuf, name: &str, content: &str) -> PathBuf {
     let mut file = dir.clone();
     file.push(name);
-    fs::write(&file, data).expect("failed to write to file");
+    fs::write(&file, content)
+        .unwrap_or_else(|_| panic!("Failed to write to file {}.", file.display()));
     file
 }
 
 pub fn get_file_string_content(path: &Path) -> String {
-    let mut file = File::open(path).expect("failed to open file");
+    let mut file =
+        File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}.", path.display()));
     let mut content = String::new();
     file.read_to_string(&mut content)
-        .expect("failed to read file content");
+        .unwrap_or_else(|_| panic!("Failed to read the file content of {}.", path.display()));
     content
 }

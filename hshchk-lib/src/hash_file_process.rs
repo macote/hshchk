@@ -101,7 +101,7 @@ impl<'a> HashFileProcessor<'a> {
         let mut work_path = env::current_dir().unwrap();
         work_path.push(bin_file_name.clone());
         if !work_path.is_file() {
-            // the app binary is not in the target root. ignore skip logic.
+            // The app binary is not in the target root. ignore skip logic.
             bin_file_name = PathBuf::new();
         }
 
@@ -259,7 +259,7 @@ impl<'a> HashFileProcessor<'a> {
 impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
     fn process_file(&mut self, file_path: &Path) {
         if file_path == self.hash_file_path {
-            return; // skip current hash file
+            return; // Skip current hash file
         }
 
         let file_path_str = match file_path.to_str() {
@@ -303,7 +303,7 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
                 return;
             }
         } else if relative_file_path == self.bin_file_name {
-            return; // skip app binary file
+            return; // Skip app binary file
         } else if self.process_type == HashFileProcessType::Verify {
             if self.report_extra_files {
                 self.handle_warning(relative_file_path, FileProcessState::Extra);

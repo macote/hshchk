@@ -153,7 +153,7 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
 
 fn main() {
     #[cfg(windows)]
-    let _ = ansi_term::enable_ansi_support(); // for Windows
+    let _ = ansi_term::enable_ansi_support(); // For Windows
 
     let result = run();
 
@@ -163,7 +163,7 @@ fn main() {
 
             match clap_error.kind {
                 clap::ErrorKind::HelpDisplayed | clap::ErrorKind::VersionDisplayed => {
-                    // the exit code should not indicate an error for --help / --version
+                    // The exit code should not indicate an error for --help / --version
                     std::process::exit(0)
                 }
                 _ => (),
