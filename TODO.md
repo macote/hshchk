@@ -16,5 +16,3 @@
   - inaccessible files and folders
 - tests
 - readme
-- packaging
-- release
