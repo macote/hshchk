@@ -8,8 +8,10 @@
 
 ## dpkg
 
+``` bash
 wget "https://github.com/macote/hshchk/releases/download/v0.1.0/hshchk_0.1.0_amd64.deb"
 sudo dpkg -i hshchk_0.1.0_amd64.deb
+```
 
 ## Other
 
