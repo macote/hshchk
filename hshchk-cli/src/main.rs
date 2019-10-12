@@ -152,14 +152,15 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
 }
 
 fn main() {
+    // Enable ANSI support for Windows
     #[cfg(windows)]
-    let _ = ansi_term::enable_ansi_support(); // For Windows
+    let _ = ansi_term::enable_ansi_support();
 
     let result = run();
 
     if let Err(error) = result {
         if let Some(clap_error) = error.downcast_ref::<clap::Error>() {
-            eprint!("{}", clap_error); // clap errors already have newlines
+            eprint!("{}", clap_error); // `clap` errors already have newlines
 
             match clap_error.kind {
                 clap::ErrorKind::HelpDisplayed | clap::ErrorKind::VersionDisplayed => {
