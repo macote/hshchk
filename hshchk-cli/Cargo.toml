@@ -6,7 +6,7 @@ categories = ["command-line-utilities"]
 version = "0.1.0"
 repository = "https://github.com/macote/hshchk"
 readme = "README.md"
-license = "MIT/Apache-2.0"
+license = "MIT"
 edition = "2018"
 
 [dependencies]

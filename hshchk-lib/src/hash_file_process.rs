@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 
 static HASH_FILE_BASE_NAME: &str = "hshchk";
+const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2_097_152;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum HashFileProcessType {
@@ -25,7 +26,7 @@ pub enum HashFileProcessResult {
     Canceled,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FileProcessState {
     Extra,
     InvalidUnicodeFileName,
@@ -35,6 +36,7 @@ pub enum FileProcessState {
     Error(String),
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct FileProcessEntry {
     pub file_path: PathBuf,
     pub state: FileProcessState,
@@ -78,8 +80,6 @@ pub struct HashFileProcessor<'a> {
     complete_event: Option<Box<dyn Fn(HashFileProcessResult) + 'a>>,
 }
 
-const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2_097_152;
-
 impl<'a> HashFileProcessor<'a> {
     pub fn new_with_options(options: HashFileProcessOptions) -> Self {
         let mut process_type = HashFileProcessType::Create;
@@ -101,7 +101,7 @@ impl<'a> HashFileProcessor<'a> {
         let mut work_path = env::current_dir().unwrap();
         work_path.push(bin_file_name.clone());
         if !work_path.is_file() {
-            // The app binary is not in the target root. ignore skip logic.
+            // The app binary is not in the target root. Ignore skip logic.
             bin_file_name = PathBuf::new();
         }
 
@@ -145,11 +145,11 @@ impl<'a> HashFileProcessor<'a> {
             });
         }
     }
-    pub fn handle_warning(&mut self, file_path: &Path, error_state: FileProcessState) {
-        if let Some(handler) = &self.error_event {
+    pub fn handle_warning(&mut self, file_path: &Path, warning_state: FileProcessState) {
+        if let Some(handler) = &self.warning_event {
             handler(FileProcessEntry {
                 file_path: file_path.to_path_buf(),
-                state: error_state,
+                state: warning_state,
             });
         }
     }
@@ -182,7 +182,7 @@ impl<'a> HashFileProcessor<'a> {
 
         if let Err(why) = file_tree.traverse(&path, &cancellation_token) {
             panic!(
-                "couldn't traverse {}: {}",
+                "Couldn't traverse {}: {}.",
                 path.display(),
                 why.description()
             );

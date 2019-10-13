@@ -2,7 +2,7 @@
 
 # hshchk (Hash Check)
 
-`hshchk` let you create or verify checksums on folder files recursively.
+`hshchk` lets you create or verify checksums on folder files recursively.
 
 # Installation
 
@@ -18,4 +18,5 @@ sudo dpkg -i hshchk_0.1.0_amd64.deb
 Download source and build with cargo.
 
 # License
+
 MIT

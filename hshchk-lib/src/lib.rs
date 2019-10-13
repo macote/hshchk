@@ -103,6 +103,8 @@ mod tests {
 
     // block hasher
 
+    // ...
+
     // file hash
     #[test]
     fn file_hash_bytes_processed_event_handler_undefined() {
@@ -274,6 +276,4 @@ mod tests {
         hash_file.remove_entry("filename");
         assert!(hash_file.is_empty());
     }
-
-    // hash file process
 }
