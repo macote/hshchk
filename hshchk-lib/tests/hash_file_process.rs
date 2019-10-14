@@ -7,7 +7,8 @@ use std::sync::mpsc::channel;
 #[path = "../src/test/mod.rs"]
 mod test;
 
-static FILE_DATA_CHECKSUM: &str = "file|4|a17c9aaa61e80a1bf71d0d850af4e5baa9800bbd\n";
+static FILE_DATA_SHA1: &str = "file|4|a17c9aaa61e80a1bf71d0d850af4e5baa9800bbd\n";
+static FILE_DATA_MD5: &str = "file|4|8d777f385d3dfec8815d20f7496026dc\n";
 
 #[test]
 fn hash_file_process_create_empty() {
@@ -26,7 +27,21 @@ fn hash_file_process_create() {
     let checksum_file = dir.join("hshchk.sha1");
     assert_eq!(
         test::get_file_string_content(&checksum_file),
-        FILE_DATA_CHECKSUM
+        FILE_DATA_SHA1
+    );
+    fs::remove_dir_all(dir).expect("Failed to remove test directory.");
+}
+
+#[test]
+fn hash_file_process_create_md5() {
+    let dir = test::create_tmp_dir();
+    let _ = test::create_file_with_content(&dir, "file", "data");
+    let mut processor = HashFileProcessor::new(&dir, HashType::MD5, false);
+    assert_eq!(processor.process(), HashFileProcessResult::Success);
+    let checksum_file = dir.join("hshchk.md5");
+    assert_eq!(
+        test::get_file_string_content(&checksum_file),
+        FILE_DATA_MD5
     );
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -40,7 +55,7 @@ fn hash_file_process_create_force() {
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     assert_eq!(
         test::get_file_string_content(&checksum_file),
-        FILE_DATA_CHECKSUM
+        FILE_DATA_SHA1
     );
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -59,7 +74,7 @@ fn hash_file_process_create_ignore() {
     let checksum_file = dir.join("hshchk.sha1");
     assert_eq!(
         test::get_file_string_content(&checksum_file),
-        FILE_DATA_CHECKSUM
+        FILE_DATA_SHA1
     );
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -78,7 +93,7 @@ fn hash_file_process_create_match() {
     let checksum_file = dir.join("hshchk.sha1");
     assert_eq!(
         test::get_file_string_content(&checksum_file),
-        FILE_DATA_CHECKSUM
+        FILE_DATA_SHA1
     );
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -87,7 +102,7 @@ fn hash_file_process_create_match() {
 fn hash_file_process_verify() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "data");
-    let _ = test::create_file_with_content(&dir, "hshchk.sha1", FILE_DATA_CHECKSUM);
+    let _ = test::create_file_with_content(&dir, "hshchk.sha1", FILE_DATA_SHA1);
     let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: dir.clone(),
         ..Default::default()
@@ -95,13 +110,72 @@ fn hash_file_process_verify() {
     let (sender, receiver) = channel();
     let sender_error = sender.clone();
     processor.set_error_event_handler(Box::new(move |_| {
-        sender_error.send(1).unwrap();
+        sender_error.send("error").unwrap();
     }));
     let sender_warning = sender.clone();
     processor.set_warning_event_handler(Box::new(move |_| {
-        sender_warning.send(1).unwrap();
+        sender_warning.send("warning").unwrap();
     }));
     assert_eq!(processor.process(), HashFileProcessResult::Success);
+    assert!(receiver.try_recv().is_err());
+    fs::remove_dir_all(dir).expect("Failed to remove test directory.");
+}
+
+#[test]
+fn hash_file_process_verify_missing() {
+    let dir = test::create_tmp_dir();
+    let _ = test::create_file_with_content(&dir, "hshchk.sha1", FILE_DATA_SHA1);
+    let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
+        base_path: dir.clone(),
+        ..Default::default()
+    });
+    let (sender, receiver) = channel();
+    let sender_error = sender.clone();
+    processor.set_error_event_handler(Box::new(move |file_process_entry| {
+        sender_error.send(file_process_entry).unwrap();
+    }));
+    assert_eq!(processor.process(), HashFileProcessResult::Error);
+    assert_eq!(FileProcessEntry { file_path: PathBuf::from("file"), state: FileProcessState::Missing }, receiver.recv().unwrap());
+    assert!(receiver.try_recv().is_err());
+    fs::remove_dir_all(dir).expect("Failed to remove test directory.");
+}
+
+#[test]
+fn hash_file_process_verify_incorrect_file_size() {
+    let dir = test::create_tmp_dir();
+    let _ = test::create_file_with_content(&dir, "file", "datadata");
+    let _ = test::create_file_with_content(&dir, "hshchk.sha1", FILE_DATA_SHA1);
+    let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
+        base_path: dir.clone(),
+        ..Default::default()
+    });
+    let (sender, receiver) = channel();
+    let sender_error = sender.clone();
+    processor.set_error_event_handler(Box::new(move |file_process_entry| {
+        sender_error.send(file_process_entry).unwrap();
+    }));
+    assert_eq!(processor.process(), HashFileProcessResult::Error);
+    assert_eq!(FileProcessEntry { file_path: PathBuf::from("file"), state: FileProcessState::IncorrectSize }, receiver.recv().unwrap());
+    assert!(receiver.try_recv().is_err());
+    fs::remove_dir_all(dir).expect("Failed to remove test directory.");
+}
+
+#[test]
+fn hash_file_process_verify_incorrect_hash() {
+    let dir = test::create_tmp_dir();
+    let _ = test::create_file_with_content(&dir, "file", "tada");
+    let _ = test::create_file_with_content(&dir, "hshchk.sha1", FILE_DATA_SHA1);
+    let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
+        base_path: dir.clone(),
+        ..Default::default()
+    });
+    let (sender, receiver) = channel();
+    let sender_error = sender.clone();
+    processor.set_error_event_handler(Box::new(move |file_process_entry| {
+        sender_error.send(file_process_entry).unwrap();
+    }));
+    assert_eq!(processor.process(), HashFileProcessResult::Error);
+    assert_eq!(FileProcessEntry { file_path: PathBuf::from("file"), state: FileProcessState::IncorrectHash }, receiver.recv().unwrap());
     assert!(receiver.try_recv().is_err());
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -110,7 +184,7 @@ fn hash_file_process_verify() {
 fn hash_file_process_verify_extra_files() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "data");
-    let _ = test::create_file_with_content(&dir, "hshchk.sha1", FILE_DATA_CHECKSUM);
+    let _ = test::create_file_with_content(&dir, "hshchk.sha1", FILE_DATA_SHA1);
     let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: dir.clone(),
         report_extra_files: Some(true),
@@ -138,7 +212,7 @@ fn hash_file_process_verify_extra_files() {
 fn hash_file_process_verify_file_size_only() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "tada");
-    let _ = test::create_file_with_content(&dir, "hshchk.sha1", FILE_DATA_CHECKSUM);
+    let _ = test::create_file_with_content(&dir, "hshchk.sha1", FILE_DATA_SHA1);
     let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: dir.clone(),
         check_file_size_only: Some(true),
@@ -151,8 +225,8 @@ fn hash_file_process_verify_file_size_only() {
         sender_error.send("error").unwrap();
     }));
     let sender_warning = warning_sender.clone();
-    processor.set_warning_event_handler(Box::new(move |file_process_entry| {
-        sender_warning.send(file_process_entry.clone()).unwrap();
+    processor.set_warning_event_handler(Box::new(move |_| {
+        sender_warning.send("warning").unwrap();
     }));
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     assert!(error_receiver.try_recv().is_err());
