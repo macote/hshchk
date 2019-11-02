@@ -53,8 +53,8 @@ pub struct HashFileProcessOptions<'a> {
     pub base_path: PathBuf,
     pub hash_type: Option<HashType>,
     pub force_create: Option<bool>,
-    pub report_extra_files: Option<bool>,
-    pub check_file_size_only: Option<bool>,
+    pub report_extra: Option<bool>,
+    pub size_only: Option<bool>,
     pub match_pattern: Option<&'a str>,
     pub ignore_pattern: Option<&'a str>,
 }
@@ -66,8 +66,8 @@ pub struct HashFileProcessor<'a> {
     hash_file_path: PathBuf,
     bin_file_name: PathBuf,
     base_path: PathBuf,
-    check_file_size_only: bool,
-    report_extra_files: bool,
+    size_only: bool,
+    report_extra: bool,
     match_regex: Option<Regex>,
     ignore_regex: Option<Regex>,
     error_occurred: bool,
@@ -112,8 +112,8 @@ impl<'a> HashFileProcessor<'a> {
             hash_file_path,
             bin_file_name,
             base_path: cano_base_path,
-            check_file_size_only: options.check_file_size_only.unwrap_or_default(),
-            report_extra_files: options.report_extra_files.unwrap_or_default(),
+            size_only: options.size_only.unwrap_or_default(),
+            report_extra: options.report_extra.unwrap_or_default(),
             match_regex: options.match_pattern.map(|s| Regex::new(s).unwrap()),
             ignore_regex: options.ignore_pattern.map(|s| Regex::new(s).unwrap()),
             error_occurred: false,
@@ -196,7 +196,7 @@ impl<'a> HashFileProcessor<'a> {
             return HashFileProcessResult::Error;
         } else if self.process_type == HashFileProcessType::Create {
             if self.hash_file.is_empty() {
-                return HashFileProcessResult::Error;
+                return HashFileProcessResult::NoFilesProcessed;
             }
 
             self.hash_file.save(&self.hash_file_path);
@@ -305,14 +305,14 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
         } else if relative_file_path == self.bin_file_name {
             return; // Skip app binary file
         } else if self.process_type == HashFileProcessType::Verify {
-            if self.report_extra_files {
+            if self.report_extra {
                 self.handle_warning(relative_file_path, FileProcessState::Extra);
             }
             return;
         }
 
         let mut digest = String::from("");
-        if !(self.check_file_size_only && self.process_type == HashFileProcessType::Verify) {
+        if !(self.size_only && self.process_type == HashFileProcessType::Verify) {
             let mut file_hasher = crate::get_file_hasher(self.hash_type, file_path);
             if let Some(handler) = &self.progress_event {
                 handler(ProcessProgress {
@@ -343,7 +343,7 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
                 .add_entry(relative_file_path_str, file_size, &digest);
         } else if self.process_type == HashFileProcessType::Verify {
             if let Some(file_entry) = hash_file_entry {
-                if !self.check_file_size_only && digest != file_entry.digest {
+                if !self.size_only && digest != file_entry.digest {
                     self.handle_error(relative_file_path, FileProcessState::IncorrectHash);
                 }
             }

@@ -104,8 +104,8 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         base_path: target_path,
         hash_type: Some(hash_type),
         force_create: Some(matches.is_present("create")),
-        report_extra_files: Some(matches.is_present("extra")),
-        check_file_size_only: Some(matches.is_present("size")),
+        report_extra: Some(matches.is_present("extra")),
+        size_only: Some(matches.is_present("size")),
         match_pattern: matches.value_of("match"),
         ignore_pattern: matches.value_of("ignore"),
     });

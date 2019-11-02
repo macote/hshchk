@@ -1,11 +1,9 @@
 # To do
 
-- determine if hshchk should use (md5|sha1|etc.)sum file format by default
-  - if so, it needs to stay backward compatible with `filename|size|hash` format
-- report/stats (file counts)
+- report/stats
 - features
-  - -o option: output file
   - support (md5|sha1|etc.)sum files
+  - update checksum file
 - verbosity
   - progress loop
     - filetree updates
