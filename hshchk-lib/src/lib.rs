@@ -97,9 +97,9 @@ mod test;
 mod tests {
     use super::*;
     use crate::hash_file::HashFile;
-    use cancellation::CancellationToken;
+    use cancellation::CancellationTokenSource;
+    use crossbeam::crossbeam_channel::unbounded;
     use std::fs;
-    use std::sync::mpsc::channel;
 
     // block hasher
 
@@ -107,19 +107,20 @@ mod tests {
 
     // file hash
     #[test]
-    fn file_hash_bytes_processed_event_handler_undefined() {
+    fn file_hash_bytes_processed_event_sender_undefined() {
         let file = test::create_tmp_file("");
         let file_hash: FileHash<Md5> = FileHash::new(&file);
-        assert_eq!(file_hash.is_bytes_processed_event_handler_defined(), false);
+        assert_eq!(file_hash.is_bytes_processed_event_sender_defined(), false);
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
     #[test]
-    fn file_hash_bytes_processed_event_handler_defined() {
+    fn file_hash_bytes_processed_event_sender_defined() {
         let file = test::create_tmp_file("");
         let mut file_hash: FileHash<Md5> = FileHash::new(&file);
-        file_hash.set_bytes_processed_event_handler(Box::new(move |_args| {}));
-        assert_eq!(file_hash.is_bytes_processed_event_handler_defined(), true);
+        let (sender, _) = unbounded();
+        file_hash.set_bytes_processed_event_sender(sender);
+        assert_eq!(file_hash.is_bytes_processed_event_sender_defined(), true);
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
@@ -127,7 +128,9 @@ mod tests {
     fn file_hash_empty_file() {
         let file = test::create_tmp_file("");
         let mut file_hash = get_md5_file_hasher(&file);
-        file_hash.compute(CancellationToken::none());
+        let cancellation_token_source = CancellationTokenSource::new();
+        let cancellation_token = cancellation_token_source.token();
+        file_hash.compute(cancellation_token.clone());
         let digest = file_hash.digest();
         assert_eq!(digest, "d41d8cd98f00b204e9800998ecf8427e");
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
@@ -137,7 +140,9 @@ mod tests {
     fn file_hash_data_file() {
         let file = test::create_tmp_file("data");
         let mut file_hash = get_md5_file_hasher(&file);
-        file_hash.compute(CancellationToken::none());
+        let cancellation_token_source = CancellationTokenSource::new();
+        let cancellation_token = cancellation_token_source.token();
+        file_hash.compute(cancellation_token.clone());
         let digest = file_hash.digest();
         assert_eq!(digest, "8d777f385d3dfec8815d20f7496026dc");
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
@@ -147,18 +152,17 @@ mod tests {
     fn file_hash_data_two_blocks() {
         let file = test::create_tmp_file("datadata");
         let mut file_hash: FileHash<Md5> = FileHash::new_with_buffer_size(&file, 2);
-        let (sender, receiver) = channel();
-        file_hash.set_bytes_processed_event_handler_with_bytes_processed_notification_block_size(
-            Box::new(move |args| {
-                sender.send(args.bytes_processed).unwrap();
-            }),
-            4,
+        let (sender, receiver) = unbounded();
+        file_hash.set_bytes_processed_event_sender_with_bytes_processed_notification_block_size(
+            sender, 4,
         );
-        file_hash.compute(CancellationToken::none());
+        let cancellation_token_source = CancellationTokenSource::new();
+        let cancellation_token = cancellation_token_source.token();
+        file_hash.compute(cancellation_token.clone());
         let digest = file_hash.digest();
         assert_eq!(digest, "511ae0b1c13f95e5f08f1a0dd3da3d93");
-        assert_eq!(Ok(4), receiver.recv());
-        assert_eq!(Ok(8), receiver.recv());
+        assert_eq!(4, receiver.recv().unwrap().bytes_processed);
+        assert_eq!(8, receiver.recv().unwrap().bytes_processed);
         assert!(receiver.try_recv().is_err());
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }

@@ -1,12 +1,14 @@
 use crate::file_tree::{FileTree, FileTreeProcessor};
 use crate::hash_file::HashFile;
 use crate::HashType;
-use cancellation::CancellationToken;
+use cancellation::{CancellationToken, CancellationTokenSource};
+use crossbeam::crossbeam_channel::Sender;
 use regex::Regex;
 use std::env;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use strum::IntoEnumIterator;
 
 static HASH_FILE_BASE_NAME: &str = "hshchk";
@@ -59,7 +61,7 @@ pub struct HashFileProcessOptions<'a> {
     pub ignore_pattern: Option<&'a str>,
 }
 
-pub struct HashFileProcessor<'a> {
+pub struct HashFileProcessor {
     hash_file: HashFile,
     hash_type: HashType,
     process_type: HashFileProcessType,
@@ -73,14 +75,14 @@ pub struct HashFileProcessor<'a> {
     error_occurred: bool,
     files_processed: bool,
     bytes_processed_notification_block_size: usize,
-    cancellation_token: Option<&'a CancellationToken>,
-    progress_event: Option<Box<dyn Fn(ProcessProgress) + 'a>>,
-    warning_event: Option<Box<dyn Fn(FileProcessEntry) + 'a>>,
-    error_event: Option<Box<dyn Fn(FileProcessEntry) + 'a>>,
-    complete_event: Option<Box<dyn Fn(HashFileProcessResult) + 'a>>,
+    cancellation_token: Option<Arc<CancellationToken>>,
+    progress_event: Option<Sender<ProcessProgress>>,
+    warning_event: Option<Sender<FileProcessEntry>>,
+    error_event: Option<Sender<FileProcessEntry>>,
+    complete_event: Option<Sender<HashFileProcessResult>>,
 }
 
-impl<'a> HashFileProcessor<'a> {
+impl HashFileProcessor {
     pub fn new_with_options(options: HashFileProcessOptions) -> Self {
         let mut process_type = HashFileProcessType::Create;
         let mut actual_hash_type = options.hash_type.unwrap_or(HashType::SHA1);
@@ -138,40 +140,46 @@ impl<'a> HashFileProcessor<'a> {
     pub fn handle_error(&mut self, file_path: &Path, error_state: FileProcessState) {
         self.error_occurred = true;
         self.files_processed = true;
-        if let Some(handler) = &self.error_event {
-            handler(FileProcessEntry {
-                file_path: file_path.to_path_buf(),
-                state: error_state,
-            });
+        if let Some(sender) = &self.error_event {
+            sender
+                .send(FileProcessEntry {
+                    file_path: file_path.to_path_buf(),
+                    state: error_state,
+                })
+                .unwrap();
         }
     }
     pub fn handle_warning(&mut self, file_path: &Path, warning_state: FileProcessState) {
-        if let Some(handler) = &self.warning_event {
-            handler(FileProcessEntry {
-                file_path: file_path.to_path_buf(),
-                state: warning_state,
-            });
+        if let Some(sender) = &self.warning_event {
+            sender
+                .send(FileProcessEntry {
+                    file_path: file_path.to_path_buf(),
+                    state: warning_state,
+                })
+                .unwrap();
         }
     }
     pub fn process(&mut self) -> HashFileProcessResult {
-        self.process_with_cancellation_token(CancellationToken::none())
+        let cts = CancellationTokenSource::new();
+        let cancellation_token = cts.token();
+        self.process_with_cancellation_token(cancellation_token.clone())
     }
     pub fn process_with_cancellation_token(
         &mut self,
-        cancellation_token: &'a CancellationToken,
+        cancellation_token: Arc<CancellationToken>,
     ) -> HashFileProcessResult {
         let result = self.process_internal(cancellation_token);
-        if let Some(handler) = &self.complete_event {
-            handler(result);
+        if let Some(sender) = &self.complete_event {
+            sender.send(result).unwrap();
         }
 
         result
     }
     pub fn process_internal(
         &mut self,
-        cancellation_token: &'a CancellationToken,
+        cancellation_token: Arc<CancellationToken>,
     ) -> HashFileProcessResult {
-        self.cancellation_token = Some(cancellation_token);
+        self.cancellation_token = Some(cancellation_token.clone());
 
         if self.process_type == HashFileProcessType::Verify {
             self.hash_file.load(&self.hash_file_path);
@@ -228,35 +236,35 @@ impl<'a> HashFileProcessor<'a> {
             HashFileProcessResult::NoFilesProcessed
         }
     }
-    pub fn set_progress_event_handler(&mut self, handler: Box<dyn Fn(ProcessProgress) + 'a>) {
-        self.set_progress_event_handler_with_bytes_processed_notification_block_size(
-            handler,
+    pub fn set_progress_event_sender(&mut self, sender: Sender<ProcessProgress>) {
+        self.set_progress_event_sender_with_bytes_processed_notification_block_size(
+            sender,
             DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
         )
     }
-    pub fn set_progress_event_handler_with_bytes_processed_notification_block_size(
+    pub fn set_progress_event_sender_with_bytes_processed_notification_block_size(
         &mut self,
-        handler: Box<dyn Fn(ProcessProgress) + 'a>,
+        sender: Sender<ProcessProgress>,
         bytes_processed_notification_block_size: usize,
     ) {
-        self.progress_event = Some(handler);
+        self.progress_event = Some(sender);
         self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
     }
-    pub fn set_warning_event_handler(&mut self, handler: Box<dyn Fn(FileProcessEntry) + 'a>) {
-        self.warning_event = Some(handler);
+    pub fn set_warning_event_sender(&mut self, sender: Sender<FileProcessEntry>) {
+        self.warning_event = Some(sender);
     }
-    pub fn set_error_event_handler(&mut self, handler: Box<dyn Fn(FileProcessEntry) + 'a>) {
-        self.error_event = Some(handler);
+    pub fn set_error_event_sender(&mut self, sender: Sender<FileProcessEntry>) {
+        self.error_event = Some(sender);
     }
-    pub fn set_complete_event_handler(&mut self, handler: Box<dyn Fn(HashFileProcessResult) + 'a>) {
-        self.complete_event = Some(handler);
+    pub fn set_complete_event_sender(&mut self, sender: Sender<HashFileProcessResult>) {
+        self.complete_event = Some(sender);
     }
     pub fn get_process_type(&self) -> HashFileProcessType {
         self.process_type
     }
 }
 
-impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
+impl FileTreeProcessor for HashFileProcessor {
     fn process_file(&mut self, file_path: &Path) {
         if file_path == self.hash_file_path {
             return; // Skip current hash file
@@ -314,23 +322,25 @@ impl<'a> FileTreeProcessor for HashFileProcessor<'a> {
         let mut digest = String::from("");
         if !(self.size_only && self.process_type == HashFileProcessType::Verify) {
             let mut file_hasher = crate::get_file_hasher(self.hash_type, file_path);
-            if let Some(handler) = &self.progress_event {
-                handler(ProcessProgress {
-                    file_path: relative_file_path.to_path_buf(),
-                    file_size,
-                    bytes_processed: 0,
-                });
-                file_hasher.set_bytes_processed_event_handler(Box::new(move |args| {
-                    handler(ProcessProgress {
+            if let Some(sender) = &self.progress_event {
+                sender
+                    .send(ProcessProgress {
                         file_path: relative_file_path.to_path_buf(),
                         file_size,
-                        bytes_processed: args.bytes_processed,
-                    });
-                }));
+                        bytes_processed: 0,
+                    })
+                    .unwrap();
+                // file_hasher.set_bytes_processed_event_sender(Box::new(move |args| {
+                //     sender(ProcessProgress {
+                //         file_path: relative_file_path.to_path_buf(),
+                //         file_size,
+                //         bytes_processed: args.bytes_processed,
+                //     });
+                // }));
             }
 
             let cancellation_token = self.cancellation_token.as_ref().unwrap();
-            file_hasher.compute(cancellation_token);
+            file_hasher.compute(cancellation_token.clone());
             digest = file_hasher.digest();
 
             if cancellation_token.is_canceled() {

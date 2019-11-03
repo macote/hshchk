@@ -10,6 +10,7 @@ license = "MIT"
 edition = "2018"
 
 [dependencies]
+crossbeam = "0.7"
 cancellation = "0.1"
 digest = "0.8"
 md-5 = "0.8"

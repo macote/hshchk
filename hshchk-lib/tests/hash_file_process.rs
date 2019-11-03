@@ -1,8 +1,8 @@
+use crossbeam::crossbeam_channel::unbounded;
 use hshchk_lib::hash_file_process::*;
 use hshchk_lib::HashType;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::mpsc::channel;
 
 #[path = "../src/test/mod.rs"]
 mod test;
@@ -109,15 +109,11 @@ fn hash_file_process_verify() {
         base_path: dir.clone(),
         ..Default::default()
     });
-    let (sender, receiver) = channel();
+    let (sender, receiver) = unbounded();
     let sender_error = sender.clone();
-    processor.set_error_event_handler(Box::new(move |_| {
-        sender_error.send("error").unwrap();
-    }));
+    processor.set_error_event_sender(sender_error);
     let sender_warning = sender.clone();
-    processor.set_warning_event_handler(Box::new(move |_| {
-        sender_warning.send("warning").unwrap();
-    }));
+    processor.set_warning_event_sender(sender_warning);
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     assert!(receiver.try_recv().is_err());
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
@@ -131,11 +127,9 @@ fn hash_file_process_verify_missing() {
         base_path: dir.clone(),
         ..Default::default()
     });
-    let (sender, receiver) = channel();
+    let (sender, receiver) = unbounded();
     let sender_error = sender.clone();
-    processor.set_error_event_handler(Box::new(move |file_process_entry| {
-        sender_error.send(file_process_entry).unwrap();
-    }));
+    processor.set_error_event_sender(sender_error);
     assert_eq!(processor.process(), HashFileProcessResult::Error);
     assert_eq!(FileProcessEntry { file_path: PathBuf::from("file"), state: FileProcessState::Missing }, receiver.recv().unwrap());
     assert!(receiver.try_recv().is_err());
@@ -151,11 +145,9 @@ fn hash_file_process_verify_incorrect_size() {
         base_path: dir.clone(),
         ..Default::default()
     });
-    let (sender, receiver) = channel();
+    let (sender, receiver) = unbounded();
     let sender_error = sender.clone();
-    processor.set_error_event_handler(Box::new(move |file_process_entry| {
-        sender_error.send(file_process_entry).unwrap();
-    }));
+    processor.set_error_event_sender(sender_error);
     assert_eq!(processor.process(), HashFileProcessResult::Error);
     assert_eq!(FileProcessEntry { file_path: PathBuf::from("file"), state: FileProcessState::IncorrectSize }, receiver.recv().unwrap());
     assert!(receiver.try_recv().is_err());
@@ -171,11 +163,9 @@ fn hash_file_process_verify_incorrect_hash() {
         base_path: dir.clone(),
         ..Default::default()
     });
-    let (sender, receiver) = channel();
+    let (sender, receiver) = unbounded();
     let sender_error = sender.clone();
-    processor.set_error_event_handler(Box::new(move |file_process_entry| {
-        sender_error.send(file_process_entry).unwrap();
-    }));
+    processor.set_error_event_sender(sender_error);
     assert_eq!(processor.process(), HashFileProcessResult::Error);
     assert_eq!(FileProcessEntry { file_path: PathBuf::from("file"), state: FileProcessState::IncorrectHash }, receiver.recv().unwrap());
     assert!(receiver.try_recv().is_err());
@@ -192,16 +182,12 @@ fn hash_file_process_verify_report_extra() {
         report_extra: Some(true),
         ..Default::default()
     });
-    let (error_sender, error_receiver) = channel();
-    let (warning_sender, warning_receiver) = channel();
+    let (error_sender, error_receiver) = unbounded();
+    let (warning_sender, warning_receiver) = unbounded();
     let sender_error = error_sender.clone();
-    processor.set_error_event_handler(Box::new(move |_| {
-        sender_error.send("error").unwrap();
-    }));
+    processor.set_error_event_sender(sender_error);
     let sender_warning = warning_sender.clone();
-    processor.set_warning_event_handler(Box::new(move |file_process_entry| {
-        sender_warning.send(file_process_entry.clone()).unwrap();
-    }));
+    processor.set_warning_event_sender(sender_warning);
     let _ = test::create_file_with_content(&dir, "extra", "test");
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     assert_eq!(FileProcessEntry { file_path: PathBuf::from("extra"), state: FileProcessState::Extra}, warning_receiver.recv().unwrap());
@@ -220,16 +206,12 @@ fn hash_file_process_verify_size_only() {
         size_only: Some(true),
         ..Default::default()
     });
-    let (error_sender, error_receiver) = channel();
-    let (warning_sender, warning_receiver) = channel();
+    let (error_sender, error_receiver) = unbounded();
+    let (warning_sender, warning_receiver) = unbounded();
     let sender_error = error_sender.clone();
-    processor.set_error_event_handler(Box::new(move |_| {
-        sender_error.send("error").unwrap();
-    }));
+    processor.set_error_event_sender(sender_error);
     let sender_warning = warning_sender.clone();
-    processor.set_warning_event_handler(Box::new(move |_| {
-        sender_warning.send("warning").unwrap();
-    }));
+    processor.set_warning_event_sender(sender_warning);
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     assert!(error_receiver.try_recv().is_err());
     assert!(warning_receiver.try_recv().is_err());

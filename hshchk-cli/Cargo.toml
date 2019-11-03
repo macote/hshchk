@@ -11,6 +11,7 @@ edition = "2018"
 
 [dependencies]
 hshchk-lib = { path = "../hshchk-lib" }
+crossbeam = "0.7"
 cancellation = "0.1"
 ansi_term = "0.12"
 atty = "0.2"
