@@ -1,8 +1,9 @@
+use crate::block_hasher::HashProgress;
 use crate::file_tree::{FileTree, FileTreeProcessor};
 use crate::hash_file::HashFile;
 use crate::HashType;
 use cancellation::{CancellationToken, CancellationTokenSource};
-use crossbeam::crossbeam_channel::Sender;
+use crossbeam::crossbeam_channel::{select, unbounded, Sender};
 use regex::Regex;
 use std::env;
 use std::error::Error;
@@ -11,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use strum::IntoEnumIterator;
 
-static HASH_FILE_BASE_NAME: &str = "hshchk";
+static HSHCHK_BASE_FILE_NAME: &str = "hshchk";
 const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2_097_152;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -45,7 +46,7 @@ pub struct FileProcessEntry {
 }
 
 pub struct ProcessProgress {
-    pub file_path: PathBuf,
+    pub file_path: String,
     pub file_size: u64,
     pub bytes_processed: usize,
 }
@@ -76,6 +77,8 @@ pub struct HashFileProcessor {
     files_processed: bool,
     bytes_processed_notification_block_size: usize,
     cancellation_token: Option<Arc<CancellationToken>>,
+    internal_hash_progress_sender: Option<Sender<HashProgress>>,
+    internal_progress_sender: Option<Sender<ProcessProgress>>,
     progress_event: Option<Sender<ProcessProgress>>,
     warning_event: Option<Sender<FileProcessEntry>>,
     error_event: Option<Sender<FileProcessEntry>>,
@@ -123,6 +126,8 @@ impl HashFileProcessor {
             bytes_processed_notification_block_size:
                 DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
             cancellation_token: None,
+            internal_hash_progress_sender: None,
+            internal_progress_sender: None,
             progress_event: None,
             error_event: None,
             warning_event: None,
@@ -183,6 +188,42 @@ impl HashFileProcessor {
 
         if self.process_type == HashFileProcessType::Verify {
             self.hash_file.load(&self.hash_file_path);
+        }
+
+        if let Some(progress_sender) = &self.progress_event {
+            let (internal_hash_progress_sender, internal_hash_progress_receiver) = unbounded();
+            self.internal_hash_progress_sender = Some(internal_hash_progress_sender);
+            let (internal_progress_sender, internal_progress_receiver) = unbounded();
+            self.internal_progress_sender = Some(internal_progress_sender);
+            let proxy_progress_sender = progress_sender.clone();
+            std::thread::spawn(move || {
+                let mut current_file_path = String::default();
+                let mut current_file_size = 0u64;
+                loop {
+                    select! {
+                        recv(internal_progress_receiver) -> msg => {
+                            if let Ok(progress) = msg {
+                                current_file_path = progress.file_path;
+                                current_file_size = progress.file_size;
+                                proxy_progress_sender.send(ProcessProgress {
+                                    file_path: current_file_path.clone(),
+                                    file_size: current_file_size,
+                                    bytes_processed: progress.bytes_processed,
+                                }).unwrap()
+                            }
+                        },
+                        recv(internal_hash_progress_receiver) -> msg => {
+                            if let Ok(progress) = msg {
+                                proxy_progress_sender.send(ProcessProgress {
+                                    file_path: current_file_path.clone(),
+                                    file_size: current_file_size,
+                                    bytes_processed: progress.bytes_processed,
+                                }).unwrap()
+                            }
+                        },
+                    }
+                }
+            });
         }
 
         let path = self.base_path.clone();
@@ -316,27 +357,24 @@ impl FileTreeProcessor for HashFileProcessor {
             if self.report_extra {
                 self.handle_warning(relative_file_path, FileProcessState::Extra);
             }
+
             return;
         }
 
         let mut digest = String::from("");
         if !(self.size_only && self.process_type == HashFileProcessType::Verify) {
             let mut file_hasher = crate::get_file_hasher(self.hash_type, file_path);
-            if let Some(sender) = &self.progress_event {
-                sender
+            if let Some(progress_sender) = &self.internal_progress_sender {
+                progress_sender
                     .send(ProcessProgress {
-                        file_path: relative_file_path.to_path_buf(),
+                        file_path: relative_file_path.to_string_lossy().into_owned(),
                         file_size,
                         bytes_processed: 0,
                     })
                     .unwrap();
-                // file_hasher.set_bytes_processed_event_sender(Box::new(move |args| {
-                //     sender(ProcessProgress {
-                //         file_path: relative_file_path.to_path_buf(),
-                //         file_size,
-                //         bytes_processed: args.bytes_processed,
-                //     });
-                // }));
+                if let Some(hash_progress_sender) = &self.internal_hash_progress_sender {
+                    file_hasher.set_bytes_processed_event_sender(hash_progress_sender.clone());
+                }
             }
 
             let cancellation_token = self.cancellation_token.as_ref().unwrap();
@@ -367,7 +405,7 @@ impl FileTreeProcessor for HashFileProcessor {
 
 fn get_hash_file_name(hash_type: HashType) -> PathBuf {
     let hash_type_str: &str = hash_type.into();
-    let hash_file = Path::new(HASH_FILE_BASE_NAME);
+    let hash_file = Path::new(HSHCHK_BASE_FILE_NAME);
     hash_file.with_extension(hash_type_str.to_lowercase())
 }
 

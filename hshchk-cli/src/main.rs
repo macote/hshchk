@@ -131,7 +131,7 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
                     if args.bytes_processed == 0 {
                         println!(
                             "Processing {} ({})",
-                            args.file_path.display(),
+                            args.file_path,
                             args.file_size.to_formatted_string(&Locale::en)
                         );
                     }
