@@ -190,13 +190,15 @@ impl HashFileProcessor {
             self.hash_file.load(&self.hash_file_path);
         }
 
+        let mut progress_thread: Option<std::thread::JoinHandle<()>> = None;
+
         if let Some(progress_sender) = &self.progress_event {
             let (internal_hash_progress_sender, internal_hash_progress_receiver) = unbounded();
             self.internal_hash_progress_sender = Some(internal_hash_progress_sender);
             let (internal_progress_sender, internal_progress_receiver) = unbounded();
             self.internal_progress_sender = Some(internal_progress_sender);
             let proxy_progress_sender = progress_sender.clone();
-            std::thread::spawn(move || {
+            progress_thread = Some(std::thread::spawn(move || {
                 let mut current_file_path = String::default();
                 let mut current_file_size = 0u64;
                 loop {
@@ -211,6 +213,9 @@ impl HashFileProcessor {
                                     bytes_processed: progress.bytes_processed,
                                 }).unwrap()
                             }
+                            else {
+                                break;
+                            }
                         },
                         recv(internal_hash_progress_receiver) -> msg => {
                             if let Ok(progress) = msg {
@@ -223,7 +228,7 @@ impl HashFileProcessor {
                         },
                     }
                 }
-            });
+            }));
         }
 
         let path = self.base_path.clone();
@@ -235,6 +240,14 @@ impl HashFileProcessor {
                 path.display(),
                 why.description()
             );
+        }
+
+        if let Some(progress_sender) = &self.internal_progress_sender.take() {
+            drop(progress_sender);
+        }
+
+        if let Some(thread_handle) = progress_thread {
+            thread_handle.join().unwrap();
         }
 
         if cancellation_token.is_canceled() {
