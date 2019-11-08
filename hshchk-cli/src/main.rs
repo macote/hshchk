@@ -114,50 +114,69 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
 
     let (error_sender, error_receiver) = unbounded();
     let (warning_sender, warning_receiver) = unbounded();
-    processor.set_error_event_sender(error_sender.clone());
-    processor.set_warning_event_sender(warning_sender.clone());
-
     let (progress_sender, progress_receiver) = unbounded();
     let (complete_sender, complete_receiver) = unbounded();
+
+    processor.set_error_event_sender(error_sender.clone());
+    processor.set_warning_event_sender(warning_sender.clone());
     if !matches.is_present("silent") {
-        processor.set_progress_event_sender(progress_sender);
-        processor.set_complete_event_sender(complete_sender);
+        processor.set_progress_event_sender(progress_sender.clone());
+        processor.set_complete_event_sender(complete_sender.clone());
     }
 
-    let _ui = std::thread::spawn(move || loop {
-        select! {
-            recv(progress_receiver) -> msg => {
-                if let Ok(args) = msg {
-                    if args.bytes_processed == 0 {
-                        println!(
-                            "Processing {} ({})",
-                            args.file_path,
-                            args.file_size.to_formatted_string(&Locale::en)
-                        );
+    let ui = std::thread::spawn(move || {
+        let mut progress_sender_dropped = false;
+        let mut error_sender_dropped = false;
+        let mut warning_sender_dropped = false;
+        while !(progress_sender_dropped && error_sender_dropped && warning_sender_dropped) {
+            select! {
+                recv(progress_receiver) -> msg => {
+                    if let Ok(args) = msg {
+                        if args.bytes_processed == 0 {
+                            println!(
+                                "Processing {} ({})",
+                                args.file_path,
+                                args.file_size.to_formatted_string(&Locale::en)
+                            );
+                        }
                     }
-                }
-            },
-            recv(error_receiver) -> msg => {
-                if let Ok(error) = msg {
-                    eprintln!("{} => {:?}", error.file_path.display(), error.state)
-                }
-            },
-            recv(warning_receiver) -> msg => {
-                if let Ok(warning) = msg {
-                    eprintln!("{} => {:?}", warning.file_path.display(), warning.state)
-                }
-            },
-            recv(complete_receiver) -> msg => {
-                if let Ok(result) = msg {
-                    println!("{:?} result: {:?}", process_type, result);
+                    else {
+                        progress_sender_dropped = true;
+                    }
+                },
+                recv(error_receiver) -> msg => {
+                    if let Ok(error) = msg {
+                        eprintln!("{} => {:?}", error.file_path.display(), error.state)
+                    }
+                    else {
+                        error_sender_dropped = true;
+                    }
+                },
+                recv(warning_receiver) -> msg => {
+                    if let Ok(warning) = msg {
+                        eprintln!("{} => {:?}", warning.file_path.display(), warning.state)
+                    } else {
+                        warning_sender_dropped = true;
+                    }
                 }
             }
         }
     });
 
     let process = std::thread::spawn(move || {
-        processor.process_with_cancellation_token(processor_cancellation_token)
+        let result = processor.process_with_cancellation_token(processor_cancellation_token);
+        drop(progress_sender);
+        drop(error_sender);
+        drop(warning_sender);
+        result
     });
+
+    ui.join().unwrap();
+    if !matches.is_present("silent") {
+        if let Ok(result) = complete_receiver.recv() {
+            println!("{:?} result: {:?}", process_type, result);
+        }
+    }
 
     match process.join().unwrap() {
         HashFileProcessResult::Error => Err(Box::new(Error::new(
