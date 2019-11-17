@@ -9,6 +9,10 @@ readme = "README.md"
 license = "MIT"
 edition = "2018"
 
+[[bin]]
+doctest = false
+name = "hshchk"
+
 [dependencies]
 hshchk-lib = { path = "../hshchk-lib" }
 crossbeam = "0.7"
@@ -17,6 +21,10 @@ ansi_term = "0.12"
 atty = "0.2"
 ctrlc = "3.1"
 num-format = "0.4"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["lib", "staticlib"]
 
 [dependencies.clap]
 version = "2"

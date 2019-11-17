@@ -1,10 +1,9 @@
 use cancellation::CancellationTokenSource;
 use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
-use crossbeam::crossbeam_channel::{select, unbounded};
+use hshchk::UI;
 use hshchk_lib::hash_file_process::{
     HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
 };
-use num_format::{Locale, ToFormattedString};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 
@@ -74,6 +73,7 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         );
 
     let matches = app.get_matches_safe()?;
+
     let directory = match matches.value_of("directory") {
         Some(directory) => directory,
         None => ".",
@@ -92,16 +92,17 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
             .unwrap_or("SHA1")
             .to_uppercase(),
     );
-    let cts = CancellationTokenSource::new();
-    let main_cancellation_token = cts.token();
-    let processor_cancellation_token = main_cancellation_token.clone();
+
+    let cancellation_token_source = CancellationTokenSource::new();
+    let main_cancellation_token = cancellation_token_source.token();
+    let cancellation_token = main_cancellation_token.clone();
 
     ctrlc::set_handler(move || {
-        cts.cancel();
+        cancellation_token_source.cancel();
     })
     .expect("Failed to set Ctrl-C handler.");
 
-    let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
+    let processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: target_path,
         hash_type: Some(hash_type),
         force_create: Some(matches.is_present("create")),
@@ -110,75 +111,11 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         match_pattern: matches.value_of("match"),
         ignore_pattern: matches.value_of("ignore"),
     });
+
     let process_type = processor.get_process_type();
+    let ui = UI::new(processor, matches.is_present("silent"));
 
-    let (error_sender, error_receiver) = unbounded();
-    let (warning_sender, warning_receiver) = unbounded();
-    let (progress_sender, progress_receiver) = unbounded();
-    let (complete_sender, complete_receiver) = unbounded();
-
-    processor.set_error_event_sender(error_sender.clone());
-    processor.set_warning_event_sender(warning_sender.clone());
-    if !matches.is_present("silent") {
-        processor.set_progress_event_sender(progress_sender.clone());
-        processor.set_complete_event_sender(complete_sender.clone());
-    }
-
-    let ui = std::thread::spawn(move || {
-        let mut progress_sender_dropped = false;
-        let mut error_sender_dropped = false;
-        let mut warning_sender_dropped = false;
-        while !(progress_sender_dropped && error_sender_dropped && warning_sender_dropped) {
-            select! {
-                recv(progress_receiver) -> msg => {
-                    if let Ok(args) = msg {
-                        if args.bytes_processed == 0 {
-                            println!(
-                                "Processing {} ({})",
-                                args.file_path,
-                                args.file_size.to_formatted_string(&Locale::en)
-                            );
-                        }
-                    }
-                    else {
-                        progress_sender_dropped = true;
-                    }
-                },
-                recv(error_receiver) -> msg => {
-                    if let Ok(error) = msg {
-                        eprintln!("{} => {:?}", error.file_path.display(), error.state)
-                    }
-                    else {
-                        error_sender_dropped = true;
-                    }
-                },
-                recv(warning_receiver) -> msg => {
-                    if let Ok(warning) = msg {
-                        eprintln!("{} => {:?}", warning.file_path.display(), warning.state)
-                    } else {
-                        warning_sender_dropped = true;
-                    }
-                }
-            }
-        }
-    });
-
-    let process = std::thread::spawn(move || {
-        let result = processor.process_with_cancellation_token(processor_cancellation_token);
-        drop(progress_sender);
-        drop(error_sender);
-        drop(warning_sender);
-        result
-    });
-
-    ui.join().unwrap();
-    if !matches.is_present("silent") {
-        if let Ok(result) = complete_receiver.recv() {
-            println!("{:?} result: {:?}", process_type, result);
-        }
-    }
-
-    match process.join().unwrap() {
+    match ui.run(cancellation_token, process_type) {
         HashFileProcessResult::Error => Err(Box::new(Error::new(
             ErrorKind::Other,
             "The hash check process failed.",
