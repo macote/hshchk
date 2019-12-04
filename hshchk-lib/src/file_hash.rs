@@ -11,11 +11,11 @@ pub struct FileHash<T: Digest> {
     buffer: Vec<u8>,
     buffer_size: usize,
     bytes_processed_event: Option<Sender<HashProgress>>,
-    bytes_processed_notification_block_size: usize,
+    bytes_processed_notification_block_size: u64,
 }
 
 const DEFAULT_BUFFER_SIZE: usize = 1_048_576;
-const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2_097_152;
+const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: u64 = 2_097_152;
 
 impl<T: Digest> FileHash<T> {
     pub fn new_with_buffer_size(file_path: &Path, buffer_size: usize) -> Self {
@@ -54,7 +54,7 @@ impl<T: Digest> BlockHasher for FileHash<T> {
     fn set_bytes_processed_event_sender_with_bytes_processed_notification_block_size(
         &mut self,
         sender: Sender<HashProgress>,
-        bytes_processed_notification_block_size: usize,
+        bytes_processed_notification_block_size: u64,
     ) {
         self.bytes_processed_event = Some(sender);
         self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
@@ -62,7 +62,7 @@ impl<T: Digest> BlockHasher for FileHash<T> {
     fn is_bytes_processed_event_sender_defined(&self) -> bool {
         self.bytes_processed_event.is_some()
     }
-    fn bytes_processed_notification_block_size(&self) -> usize {
+    fn bytes_processed_notification_block_size(&self) -> u64 {
         self.bytes_processed_notification_block_size
     }
     fn handle_bytes_processed_event(&self, args: HashProgress) {

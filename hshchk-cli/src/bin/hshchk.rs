@@ -1,6 +1,6 @@
 use cancellation::CancellationTokenSource;
 use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
-use hshchk::UI;
+use hshchk::ui;
 use hshchk_lib::hash_file_process::{
     HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
 };
@@ -113,7 +113,7 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     });
 
     let process_type = processor.get_process_type();
-    let ui = UI::new(processor, matches.is_present("silent"));
+    let ui = ui::UI::new(processor, matches.is_present("silent"));
 
     match ui.run(cancellation_token, process_type) {
         HashFileProcessResult::Error => Err(Box::new(Error::new(

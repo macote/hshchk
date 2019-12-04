@@ -48,7 +48,7 @@ pub struct FileProcessEntry {
 pub struct ProcessProgress {
     pub file_path: String,
     pub file_size: u64,
-    pub bytes_processed: usize,
+    pub bytes_processed: u64,
 }
 
 #[derive(Default)]
@@ -393,6 +393,16 @@ impl FileTreeProcessor for HashFileProcessor {
             let cancellation_token = self.cancellation_token.as_ref().unwrap();
             file_hasher.compute(cancellation_token.clone());
             digest = file_hasher.digest();
+
+            if let Some(progress_sender) = &self.internal_progress_sender {
+                progress_sender
+                    .send(ProcessProgress {
+                        file_path: relative_file_path.to_string_lossy().into_owned(),
+                        file_size,
+                        bytes_processed: file_size,
+                    })
+                    .unwrap();
+            }
 
             if cancellation_token.is_canceled() {
                 return;
