@@ -1,7 +1,7 @@
 use cancellation::CancellationToken;
 use crossbeam::crossbeam_channel::{select, tick, unbounded};
 use hshchk_lib::hash_file_process::{
-    HashFileProcessResult, HashFileProcessType, HashFileProcessor,
+    FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
 };
 use num_format::{Locale, ToFormattedString};
 use std::convert::TryInto;
@@ -14,18 +14,13 @@ use std::time::{Duration, Instant};
 use crate::tty::terminal_size;
 
 static EMPTY_FILE_PATH: &str = "";
-const PROCESS_OUTPUT_REFRESH_IN_MILLISECONDS: u64 = 222;
-
-struct FileProgress {
-    file_path: String,
-    file_size: u64,
-    file_bytes_processed: u64,
-}
+const PROCESS_OUTPUT_REFRESH_IN_MILLIS: u64 = 222;
 
 struct ProgressLine {
     output_width: usize,
     refresh_rate_in_ms: u32,
     last_output_instant: Instant,
+    last_file_progress: FileProgress,
 }
 
 impl ProgressLine {
@@ -35,6 +30,9 @@ impl ProgressLine {
             output_width: output_width.0 as usize,
             refresh_rate_in_ms: 666,
             last_output_instant: Instant::now(),
+            last_file_progress: FileProgress {
+                ..Default::default()
+            },
         }
     }
     fn pad_line(&self, line: String) -> String {
@@ -53,7 +51,22 @@ impl ProgressLine {
     }
     pub fn output_progress(&mut self, file_progress: &FileProgress) {
         let now = Instant::now();
-        if file_progress.file_bytes_processed == 0 {
+        let mut mbps = 0u64;
+        let mut percent = 0u64;
+        if self.last_file_progress.file_path == file_progress.file_path {
+            percent = file_progress.bytes_processed * 100 / file_progress.file_size;
+            let elapsed_millis = now.duration_since(self.last_output_instant).as_millis();
+            if elapsed_millis > 0 {
+                mbps = ((file_progress.bytes_processed - self.last_file_progress.bytes_processed)
+                    as u128
+                    / elapsed_millis
+                    / 1000)
+                    .try_into()
+                    .unwrap();
+            }
+        }
+
+        if file_progress.bytes_processed == 0 {
             self.last_output_instant = now;
             print!(
                 "{}\r",
@@ -71,16 +84,21 @@ impl ProgressLine {
             print!(
                 "{}\r",
                 self.pad_line(format!(
-                    " Processing {} ({}; {})",
+                    " Processing {} ({} - {} % - {} MB/s)",
                     file_progress.file_path,
-                    file_progress
-                        .file_bytes_processed
-                        .to_formatted_string(&Locale::en),
-                    file_progress.file_size.to_formatted_string(&Locale::en)
+                    file_progress.file_size.to_formatted_string(&Locale::en),
+                    percent.to_formatted_string(&Locale::en),
+                    mbps.to_formatted_string(&Locale::en)
                 ))
             );
             stdout().flush().unwrap();
         }
+
+        self.last_file_progress = FileProgress {
+            file_path: file_progress.file_path.clone(),
+            file_size: file_progress.file_size,
+            bytes_processed: file_progress.bytes_processed,
+        };
     }
 }
 
@@ -125,11 +143,9 @@ impl UI {
             let mut file_progress = FileProgress {
                 file_path: String::from(""),
                 file_size: 0,
-                file_bytes_processed: 0,
+                bytes_processed: 0,
             };
-            let ticker = tick(Duration::from_millis(
-                PROCESS_OUTPUT_REFRESH_IN_MILLISECONDS,
-            ));
+            let ticker = tick(Duration::from_millis(PROCESS_OUTPUT_REFRESH_IN_MILLIS));
 
             while !senders_dropped {
                 select! {
@@ -147,11 +163,11 @@ impl UI {
 
                                 file_progress.file_path = args.file_path;
                                 file_progress.file_size = args.file_size;
-                                file_progress.file_bytes_processed = 0;
+                                file_progress.bytes_processed = 0;
                                 progress_line.output_progress(&file_progress);
                             }
                             else {
-                                file_progress.file_bytes_processed = args.bytes_processed;
+                                file_progress.bytes_processed = args.bytes_processed;
                             }
                         }
                         else {

@@ -45,7 +45,8 @@ pub struct FileProcessEntry {
     pub state: FileProcessState,
 }
 
-pub struct ProcessProgress {
+#[derive(Default)]
+pub struct FileProgress {
     pub file_path: String,
     pub file_size: u64,
     pub bytes_processed: u64,
@@ -78,8 +79,8 @@ pub struct HashFileProcessor {
     bytes_processed_notification_block_size: usize,
     cancellation_token: Option<Arc<CancellationToken>>,
     internal_hash_progress_sender: Option<Sender<HashProgress>>,
-    internal_progress_sender: Option<Sender<ProcessProgress>>,
-    progress_event: Option<Sender<ProcessProgress>>,
+    internal_progress_sender: Option<Sender<FileProgress>>,
+    progress_event: Option<Sender<FileProgress>>,
     warning_event: Option<Sender<FileProcessEntry>>,
     error_event: Option<Sender<FileProcessEntry>>,
     complete_event: Option<Sender<HashFileProcessResult>>,
@@ -207,7 +208,7 @@ impl HashFileProcessor {
                             if let Ok(progress) = msg {
                                 current_file_path = progress.file_path;
                                 current_file_size = progress.file_size;
-                                proxy_progress_sender.send(ProcessProgress {
+                                proxy_progress_sender.send(FileProgress {
                                     file_path: current_file_path.clone(),
                                     file_size: current_file_size,
                                     bytes_processed: progress.bytes_processed,
@@ -219,7 +220,7 @@ impl HashFileProcessor {
                         },
                         recv(internal_hash_progress_receiver) -> msg => {
                             if let Ok(progress) = msg {
-                                proxy_progress_sender.send(ProcessProgress {
+                                proxy_progress_sender.send(FileProgress {
                                     file_path: current_file_path.clone(),
                                     file_size: current_file_size,
                                     bytes_processed: progress.bytes_processed,
@@ -290,7 +291,7 @@ impl HashFileProcessor {
             HashFileProcessResult::NoFilesProcessed
         }
     }
-    pub fn set_progress_event_sender(&mut self, sender: Sender<ProcessProgress>) {
+    pub fn set_progress_event_sender(&mut self, sender: Sender<FileProgress>) {
         self.set_progress_event_sender_with_bytes_processed_notification_block_size(
             sender,
             DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
@@ -298,7 +299,7 @@ impl HashFileProcessor {
     }
     pub fn set_progress_event_sender_with_bytes_processed_notification_block_size(
         &mut self,
-        sender: Sender<ProcessProgress>,
+        sender: Sender<FileProgress>,
         bytes_processed_notification_block_size: usize,
     ) {
         self.progress_event = Some(sender);
@@ -379,7 +380,7 @@ impl FileTreeProcessor for HashFileProcessor {
             let mut file_hasher = crate::get_file_hasher(self.hash_type, file_path);
             if let Some(progress_sender) = &self.internal_progress_sender {
                 progress_sender
-                    .send(ProcessProgress {
+                    .send(FileProgress {
                         file_path: relative_file_path.to_string_lossy().into_owned(),
                         file_size,
                         bytes_processed: 0,
@@ -396,7 +397,7 @@ impl FileTreeProcessor for HashFileProcessor {
 
             if let Some(progress_sender) = &self.internal_progress_sender {
                 progress_sender
-                    .send(ProcessProgress {
+                    .send(FileProgress {
                         file_path: relative_file_path.to_string_lossy().into_owned(),
                         file_size,
                         bytes_processed: file_size,
