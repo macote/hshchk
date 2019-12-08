@@ -41,10 +41,7 @@ fn hash_file_process_create_md5() {
     let mut processor = HashFileProcessor::new(&dir, HashType::MD5, false);
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     let checksum_file = dir.join(FILE_CHECKSUM_MD5);
-    assert_eq!(
-        test::get_file_string_content(&checksum_file),
-        FILE_DATA_MD5
-    );
+    assert_eq!(test::get_file_string_content(&checksum_file), FILE_DATA_MD5);
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
 
@@ -131,7 +128,13 @@ fn hash_file_process_verify_missing() {
     let sender_error = sender.clone();
     processor.set_error_event_sender(sender_error);
     assert_eq!(processor.process(), HashFileProcessResult::Error);
-    assert_eq!(FileProcessEntry { file_path: PathBuf::from("file"), state: FileProcessState::Missing }, receiver.recv().unwrap());
+    assert_eq!(
+        FileProcessEntry {
+            file_path: PathBuf::from("file"),
+            state: FileProcessState::Missing
+        },
+        receiver.recv().unwrap()
+    );
     assert!(receiver.try_recv().is_err());
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -149,7 +152,13 @@ fn hash_file_process_verify_incorrect_size() {
     let sender_error = sender.clone();
     processor.set_error_event_sender(sender_error);
     assert_eq!(processor.process(), HashFileProcessResult::Error);
-    assert_eq!(FileProcessEntry { file_path: PathBuf::from("file"), state: FileProcessState::IncorrectSize }, receiver.recv().unwrap());
+    assert_eq!(
+        FileProcessEntry {
+            file_path: PathBuf::from("file"),
+            state: FileProcessState::IncorrectSize
+        },
+        receiver.recv().unwrap()
+    );
     assert!(receiver.try_recv().is_err());
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -167,7 +176,13 @@ fn hash_file_process_verify_incorrect_hash() {
     let sender_error = sender.clone();
     processor.set_error_event_sender(sender_error);
     assert_eq!(processor.process(), HashFileProcessResult::Error);
-    assert_eq!(FileProcessEntry { file_path: PathBuf::from("file"), state: FileProcessState::IncorrectHash }, receiver.recv().unwrap());
+    assert_eq!(
+        FileProcessEntry {
+            file_path: PathBuf::from("file"),
+            state: FileProcessState::IncorrectHash
+        },
+        receiver.recv().unwrap()
+    );
     assert!(receiver.try_recv().is_err());
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -190,7 +205,13 @@ fn hash_file_process_verify_report_extra() {
     processor.set_warning_event_sender(sender_warning);
     let _ = test::create_file_with_content(&dir, "extra", "test");
     assert_eq!(processor.process(), HashFileProcessResult::Success);
-    assert_eq!(FileProcessEntry { file_path: PathBuf::from("extra"), state: FileProcessState::Extra}, warning_receiver.recv().unwrap());
+    assert_eq!(
+        FileProcessEntry {
+            file_path: PathBuf::from("extra"),
+            state: FileProcessState::Extra
+        },
+        warning_receiver.recv().unwrap()
+    );
     assert!(error_receiver.try_recv().is_err());
     assert!(warning_receiver.try_recv().is_err());
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");

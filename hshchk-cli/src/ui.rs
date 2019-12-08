@@ -1,17 +1,17 @@
 use cancellation::CancellationToken;
-use crossbeam::crossbeam_channel::{select, unbounded, tick};
+use crossbeam::crossbeam_channel::{select, tick, unbounded};
 use hshchk_lib::hash_file_process::{
     HashFileProcessResult, HashFileProcessType, HashFileProcessor,
 };
 use num_format::{Locale, ToFormattedString};
 use std::convert::TryInto;
-use std::io::Write;
 use std::io::stdout;
+use std::io::Write;
 use std::iter::repeat;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::tty::{terminal_size};
+use crate::tty::terminal_size;
 
 static EMPTY_FILE_PATH: &str = "";
 const PROCESS_OUTPUT_REFRESH_IN_MILLISECONDS: u64 = 222;
@@ -34,7 +34,7 @@ impl ProgressLine {
         ProgressLine {
             output_width: output_width.0 as usize,
             refresh_rate_in_ms: 666,
-            last_output_instant: Instant::now()
+            last_output_instant: Instant::now(),
         }
     }
     fn pad_line(&self, line: String) -> String {
@@ -48,24 +48,36 @@ impl ProgressLine {
         padded_line
     }
     pub fn output_processed(&self, file_path: &str) {
-        println!("{}", self.pad_line(format!("\rProcessed {}", file_path)));
+        println!("{}\r", self.pad_line(format!("Processed {}", file_path)));
         stdout().flush().unwrap();
     }
     pub fn output_progress(&mut self, file_progress: &FileProgress) {
         let now = Instant::now();
         if file_progress.file_bytes_processed == 0 {
             self.last_output_instant = now;
-            print!("{}", self.pad_line(format!("\rProcessing {} ({})",
-                file_progress.file_path,
-                file_progress.file_size.to_formatted_string(&Locale::en)))
+            print!(
+                "{}\r",
+                self.pad_line(format!(
+                    " Processing {} ({})",
+                    file_progress.file_path,
+                    file_progress.file_size.to_formatted_string(&Locale::en)
+                ))
             );
             stdout().flush().unwrap();
-        } else if now.duration_since(self.last_output_instant).as_millis() > self.refresh_rate_in_ms.into() {
+        } else if now.duration_since(self.last_output_instant).as_millis()
+            > self.refresh_rate_in_ms.into()
+        {
             self.last_output_instant = now;
-            print!("{}", self.pad_line(format!("\rProcessing {} ({}; {})",
-                file_progress.file_path,
-                file_progress.file_bytes_processed.to_formatted_string(&Locale::en),
-                file_progress.file_size.to_formatted_string(&Locale::en)))
+            print!(
+                "{}\r",
+                self.pad_line(format!(
+                    " Processing {} ({}; {})",
+                    file_progress.file_path,
+                    file_progress
+                        .file_bytes_processed
+                        .to_formatted_string(&Locale::en),
+                    file_progress.file_size.to_formatted_string(&Locale::en)
+                ))
             );
             stdout().flush().unwrap();
         }
@@ -79,10 +91,7 @@ pub struct UI {
 
 impl UI {
     pub fn new(processor: HashFileProcessor, silent: bool) -> UI {
-        UI {
-            processor,
-            silent
-         }
+        UI { processor, silent }
     }
     pub fn run(
         mut self,
@@ -105,6 +114,8 @@ impl UI {
                 .set_complete_event_sender(complete_sender.clone());
         }
 
+        let silent_progress = silent;
+
         let message_loop = std::thread::spawn(move || {
             let mut progress_sender_dropped = false;
             let mut error_sender_dropped = false;
@@ -116,11 +127,17 @@ impl UI {
                 file_size: 0,
                 file_bytes_processed: 0,
             };
-            let ticker = tick(Duration::from_millis(PROCESS_OUTPUT_REFRESH_IN_MILLISECONDS));
+            let ticker = tick(Duration::from_millis(
+                PROCESS_OUTPUT_REFRESH_IN_MILLISECONDS,
+            ));
 
             while !senders_dropped {
                 select! {
-                    recv(ticker) -> _ => progress_line.output_progress(&file_progress),
+                    recv(ticker) -> _ => {
+                        if !silent_progress {
+                            progress_line.output_progress(&file_progress);
+                        }
+                    },
                     recv(progress_receiver) -> msg => {
                         if let Ok(args) = msg {
                             if args.bytes_processed == 0 {
@@ -158,7 +175,8 @@ impl UI {
                     }
                 }
 
-                senders_dropped = progress_sender_dropped && error_sender_dropped && warning_sender_dropped;
+                senders_dropped =
+                    progress_sender_dropped && error_sender_dropped && warning_sender_dropped;
             }
 
             if !silent {
