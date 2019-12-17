@@ -1,7 +1,7 @@
 use cancellation::CancellationToken;
 use crossbeam::crossbeam_channel::{select, tick, unbounded};
 use hshchk_lib::hash_file_process::{
-    FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
+    FileProcessEntry, FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
 };
 use num_format::{Locale, ToFormattedString};
 use std::convert::TryInto;
@@ -14,11 +14,12 @@ use std::time::{Duration, Instant};
 use crate::tty::terminal_size;
 
 static EMPTY_FILE_PATH: &str = "";
-const PROCESS_OUTPUT_REFRESH_IN_MILLIS: u64 = 222;
+const TICKER_REFRESH_IN_MILLIS: u32 = 222;
+const PROGRESS_REFRESH_IN_MILLIS: u32 = 666;
 
 struct ProgressLine {
     output_width: usize,
-    refresh_rate_in_ms: u32,
+    refresh_rate_in_millis: u32,
     last_output_instant: Instant,
     last_file_progress: FileProgress,
 }
@@ -28,7 +29,7 @@ impl ProgressLine {
         let (output_width, _) = terminal_size().unwrap();
         ProgressLine {
             output_width: output_width.0 as usize,
-            refresh_rate_in_ms: 666,
+            refresh_rate_in_millis: PROGRESS_REFRESH_IN_MILLIS,
             last_output_instant: Instant::now(),
             last_file_progress: FileProgress {
                 ..Default::default()
@@ -45,8 +46,18 @@ impl ProgressLine {
 
         padded_line
     }
+    pub fn output_error(&self, file_process_entry: &FileProcessEntry) {
+        eprintln!(
+            "{}\r",
+            self.pad_line(format!(
+                " {} => {:?}",
+                file_process_entry.file_path.display(),
+                file_process_entry.state
+            ))
+        );
+    }
     pub fn output_processed(&self, file_path: &str) {
-        println!("{}\r", self.pad_line(format!("Processed {}", file_path)));
+        println!("{}\r", self.pad_line(format!(" {}", file_path)));
         stdout().flush().unwrap();
     }
     pub fn output_progress(&mut self, file_progress: &FileProgress) {
@@ -60,7 +71,7 @@ impl ProgressLine {
                 mbps = ((file_progress.bytes_processed - self.last_file_progress.bytes_processed)
                     as u128
                     / elapsed_millis
-                    / 1000)
+                    / 1_000)
                     .try_into()
                     .unwrap();
             }
@@ -71,20 +82,20 @@ impl ProgressLine {
             print!(
                 "{}\r",
                 self.pad_line(format!(
-                    " Processing {} ({})",
+                    " {} ({})",
                     file_progress.file_path,
                     file_progress.file_size.to_formatted_string(&Locale::en)
                 ))
             );
             stdout().flush().unwrap();
         } else if now.duration_since(self.last_output_instant).as_millis()
-            > self.refresh_rate_in_ms.into()
+            > self.refresh_rate_in_millis.into()
         {
             self.last_output_instant = now;
             print!(
                 "{}\r",
                 self.pad_line(format!(
-                    " Processing {} ({} - {} % - {} MB/s)",
+                    " {} ({} - {} % - {} MB/s)",
                     file_progress.file_path,
                     file_progress.file_size.to_formatted_string(&Locale::en),
                     percent.to_formatted_string(&Locale::en),
@@ -139,13 +150,14 @@ impl UI {
             let mut error_sender_dropped = false;
             let mut warning_sender_dropped = false;
             let mut senders_dropped = false;
+            let mut skip_processed = false;
             let mut progress_line = ProgressLine::new();
             let mut file_progress = FileProgress {
                 file_path: String::from(""),
                 file_size: 0,
                 bytes_processed: 0,
             };
-            let ticker = tick(Duration::from_millis(PROCESS_OUTPUT_REFRESH_IN_MILLIS));
+            let ticker = tick(Duration::from_millis(TICKER_REFRESH_IN_MILLIS as u64));
 
             while !senders_dropped {
                 select! {
@@ -157,9 +169,11 @@ impl UI {
                     recv(progress_receiver) -> msg => {
                         if let Ok(args) = msg {
                             if args.bytes_processed == 0 {
-                                if file_progress.file_path != EMPTY_FILE_PATH {
+                                if file_progress.file_path != EMPTY_FILE_PATH && !skip_processed {
                                     progress_line.output_processed(&file_progress.file_path);
                                 }
+
+                                skip_processed = false;
 
                                 file_progress.file_path = args.file_path;
                                 file_progress.file_size = args.file_size;
@@ -176,7 +190,8 @@ impl UI {
                     },
                     recv(error_receiver) -> msg => {
                         if let Ok(error) = msg {
-                            eprintln!("{} => {:?}", error.file_path.display(), error.state)
+                            skip_processed = true;
+                            progress_line.output_error(&error);
                         }
                         else {
                             error_sender_dropped = true;
@@ -184,7 +199,8 @@ impl UI {
                     },
                     recv(warning_receiver) -> msg => {
                         if let Ok(warning) = msg {
-                            eprintln!("{} => {:?}", warning.file_path.display(), warning.state)
+                            skip_processed = true;
+                            progress_line.output_error(&warning);
                         } else {
                             warning_sender_dropped = true;
                         }
@@ -213,7 +229,7 @@ impl UI {
         message_loop.join().unwrap();
         if !silent {
             if let Ok(result) = complete_receiver.recv() {
-                println!("{:?} result: {:?}", process_type, result);
+                println!(" {:?} result: {:?}", process_type, result);
             }
         }
 

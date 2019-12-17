@@ -1,0 +1,5 @@
+[target.'cfg(all(target_arch="x86_64", target_os="windows"))']
+rustflags = [
+    "-Ctarget-cpu=x86-64",
+    "-Ctarget-feature=+crt-static",
+]
