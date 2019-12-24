@@ -14,8 +14,30 @@ use std::time::{Duration, Instant};
 use crate::tty::terminal_size;
 
 static EMPTY_FILE_PATH: &str = "";
+static BPS: &str = "B/s";
+static KBPS: &str = "KB/s";
+static MBPS: &str = "MB/s";
+static GBPS: &str = "GB/s";
 const TICKER_REFRESH_IN_MILLIS: u32 = 222;
 const PROGRESS_REFRESH_IN_MILLIS: u32 = 666;
+
+struct Speed {
+    bytes_per_interval: u64,
+    unit: &'static str
+}
+
+fn get_speed(current_bytes: u64, previous_bytes: u64, elapsed_millis: u128) -> Speed {
+    let speed = (current_bytes - previous_bytes) as u128 * 1_000 / elapsed_millis;
+    if speed < 1_024 {
+        return Speed { bytes_per_interval: speed.try_into().unwrap(), unit: BPS }
+    } else if speed < 1_048_576 {
+        return Speed { bytes_per_interval: (speed / 1_024).try_into().unwrap(), unit: KBPS };
+    } else if speed < 1_073_741_824 {
+        return Speed { bytes_per_interval: (speed / 1_048_576).try_into().unwrap(), unit: MBPS };
+    }
+
+    Speed { bytes_per_interval: (speed / 1_073_741_824).try_into().unwrap(), unit: GBPS }
+}
 
 struct ProgressLine {
     output_width: usize,
@@ -62,18 +84,18 @@ impl ProgressLine {
     }
     pub fn output_progress(&mut self, file_progress: &FileProgress) {
         let now = Instant::now();
-        let mut mbps = 0u64;
+        let mut speed = Speed { bytes_per_interval: 0, unit: BPS };
         let mut percent = 0u64;
         if self.last_file_progress.file_path == file_progress.file_path {
             percent = file_progress.bytes_processed * 100 / file_progress.file_size;
             let elapsed_millis = now.duration_since(self.last_output_instant).as_millis();
             if elapsed_millis > 0 {
-                mbps = ((file_progress.bytes_processed - self.last_file_progress.bytes_processed)
-                    as u128
-                    / elapsed_millis
-                    / 1_000)
-                    .try_into()
-                    .unwrap();
+                if file_progress.bytes_processed != self.last_file_progress.bytes_processed {
+                    speed = get_speed(
+                        file_progress.bytes_processed,
+                        self.last_file_progress.bytes_processed,
+                        elapsed_millis);
+                }
             }
         }
 
@@ -95,11 +117,12 @@ impl ProgressLine {
             print!(
                 "{}\r",
                 self.pad_line(format!(
-                    " {} ({} - {} % - {} MB/s)",
+                    " {} ({} - {} % - {} {})",
                     file_progress.file_path,
                     file_progress.file_size.to_formatted_string(&Locale::en),
                     percent.to_formatted_string(&Locale::en),
-                    mbps.to_formatted_string(&Locale::en)
+                    speed.bytes_per_interval.to_formatted_string(&Locale::en),
+                    speed.unit
                 ))
             );
             stdout().flush().unwrap();
