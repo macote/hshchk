@@ -70,7 +70,7 @@ impl ProgressLine {
     pub fn new() -> Self {
         let (output_width, _) = terminal_size().unwrap();
         ProgressLine {
-            output_width: output_width.0 as usize,
+            output_width: (output_width.0 - 1) as usize,
             refresh_rate_in_millis: PROGRESS_REFRESH_IN_MILLIS,
             last_output_instant: Instant::now(),
             last_file_progress: FileProgress {
@@ -79,20 +79,35 @@ impl ProgressLine {
         }
     }
     fn output(&self, file_path: &str, info: &str, new_line: bool, error: bool) {
-        let line_output = self.pad_line(format!("{}{}", file_path, info));
-        if error {
-            eprintln!(" {}\r", line_output);
-        } else if new_line {
-            println!(" {}\r", line_output);
+        if self.output_width < 48 {
+            if error {
+                eprintln!(" {}\r", self.pad_line(format!("{}{}", file_path, info)));
+            }
         } else {
-            print!(" {}\r", line_output);
+            let printed_file_path: String;
+            let file_path_max_size = self.output_width - info.len();
+            if file_path_max_size < file_path.len() {
+                let offset = file_path.len() - file_path_max_size + "...".len();
+                printed_file_path = format!("{}{}", "...", &file_path[offset..]);
+            } else {
+                printed_file_path = file_path.to_owned();
+            }
+
+            let line_output = self.pad_line(format!("{}{}", printed_file_path, info));
+            if error {
+                eprintln!(" {}\r", line_output);
+            } else if new_line {
+                println!(" {}\r", line_output);
+            } else {
+                print!(" {}\r", line_output);
+            }
         }
 
         stdout().flush().unwrap();
     }
     fn pad_line(&self, line: String) -> String {
         let mut padded_line = line.clone();
-        if line.len() < self.output_width.try_into().unwrap() {
+        if line.len() < self.output_width {
             let gap = self.output_width - line.len();
             let pad = &repeat(" ").take(gap).collect::<String>();
             padded_line = line + pad;
@@ -105,7 +120,7 @@ impl ProgressLine {
             file_process_entry.file_path.to_str().unwrap(),
             &format!(" => {:?}", file_process_entry.state),
             true,
-            false,
+            true,
         );
     }
     pub fn output_processed(&self, file_path: &str) {
@@ -263,7 +278,7 @@ impl UI {
                     progress_sender_dropped && error_sender_dropped && warning_sender_dropped;
             }
 
-            if !silent {
+            if !silent && !skip_processed {
                 progress_line.output_processed(&file_progress.file_path);
             }
         });
