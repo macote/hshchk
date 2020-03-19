@@ -13,30 +13,50 @@ use std::time::{Duration, Instant};
 
 use crate::tty::terminal_size;
 
-static EMPTY_FILE_PATH: &str = "";
+static EMPTY_STRING: &str = "";
 static BPS: &str = "B/s";
 static KBPS: &str = "KB/s";
 static MBPS: &str = "MB/s";
 static GBPS: &str = "GB/s";
+
 const TICKER_REFRESH_IN_MILLIS: u32 = 222;
 const PROGRESS_REFRESH_IN_MILLIS: u32 = 666;
 
 struct Speed {
     bytes_per_interval: u64,
-    unit: &'static str
+    unit: &'static str,
 }
 
 fn get_speed(current_bytes: u64, previous_bytes: u64, elapsed_millis: u128) -> Speed {
-    let speed = (current_bytes - previous_bytes) as u128 * 1_000 / elapsed_millis;
-    if speed < 1_024 {
-        return Speed { bytes_per_interval: speed.try_into().unwrap(), unit: BPS }
-    } else if speed < 1_048_576 {
-        return Speed { bytes_per_interval: (speed / 1_024).try_into().unwrap(), unit: KBPS };
-    } else if speed < 1_073_741_824 {
-        return Speed { bytes_per_interval: (speed / 1_048_576).try_into().unwrap(), unit: MBPS };
+    if elapsed_millis == 0 {
+        return Speed {
+            bytes_per_interval: 0,
+            unit: BPS,
+        };
     }
 
-    Speed { bytes_per_interval: (speed / 1_073_741_824).try_into().unwrap(), unit: GBPS }
+    let speed = (current_bytes - previous_bytes) as u128 * 1_000 / elapsed_millis;
+    if speed < 1_024 {
+        return Speed {
+            bytes_per_interval: speed.try_into().unwrap(),
+            unit: BPS,
+        };
+    } else if speed < 1_048_576 {
+        return Speed {
+            bytes_per_interval: (speed / 1_024).try_into().unwrap(),
+            unit: KBPS,
+        };
+    } else if speed < 1_073_741_824 {
+        return Speed {
+            bytes_per_interval: (speed / 1_048_576).try_into().unwrap(),
+            unit: MBPS,
+        };
+    }
+
+    Speed {
+        bytes_per_interval: (speed / 1_073_741_824).try_into().unwrap(),
+        unit: GBPS,
+    }
 }
 
 struct ProgressLine {
@@ -58,6 +78,18 @@ impl ProgressLine {
             },
         }
     }
+    fn output(&self, file_path: &str, info: &str, new_line: bool, error: bool) {
+        let line_output = self.pad_line(format!("{}{}", file_path, info));
+        if error {
+            eprintln!(" {}\r", line_output);
+        } else if new_line {
+            println!(" {}\r", line_output);
+        } else {
+            print!(" {}\r", line_output);
+        }
+
+        stdout().flush().unwrap();
+    }
     fn pad_line(&self, line: String) -> String {
         let mut padded_line = line.clone();
         if line.len() < self.output_width.try_into().unwrap() {
@@ -69,63 +101,61 @@ impl ProgressLine {
         padded_line
     }
     pub fn output_error(&self, file_process_entry: &FileProcessEntry) {
-        eprintln!(
-            "{}\r",
-            self.pad_line(format!(
-                " {} => {:?}",
-                file_process_entry.file_path.display(),
-                file_process_entry.state
-            ))
+        self.output(
+            file_process_entry.file_path.to_str().unwrap(),
+            &format!(" => {:?}", file_process_entry.state),
+            true,
+            false,
         );
     }
     pub fn output_processed(&self, file_path: &str) {
-        println!("{}\r", self.pad_line(format!(" {}", file_path)));
-        stdout().flush().unwrap();
+        self.output(file_path, EMPTY_STRING, true, false);
     }
     pub fn output_progress(&mut self, file_progress: &FileProgress) {
         let now = Instant::now();
-        let mut speed = Speed { bytes_per_interval: 0, unit: BPS };
         let mut percent = 0u64;
+        let mut speed = Speed {
+            bytes_per_interval: 0,
+            unit: BPS,
+        };
         if self.last_file_progress.file_path == file_progress.file_path {
             percent = file_progress.bytes_processed * 100 / file_progress.file_size;
-            let elapsed_millis = now.duration_since(self.last_output_instant).as_millis();
-            if elapsed_millis > 0 {
-                if file_progress.bytes_processed != self.last_file_progress.bytes_processed {
-                    speed = get_speed(
-                        file_progress.bytes_processed,
-                        self.last_file_progress.bytes_processed,
-                        elapsed_millis);
-                }
+            if file_progress.bytes_processed != self.last_file_progress.bytes_processed {
+                speed = get_speed(
+                    file_progress.bytes_processed,
+                    self.last_file_progress.bytes_processed,
+                    now.duration_since(self.last_output_instant).as_millis(),
+                );
             }
         }
 
         if file_progress.bytes_processed == 0 {
             self.last_output_instant = now;
-            print!(
-                "{}\r",
-                self.pad_line(format!(
-                    " {} ({})",
-                    file_progress.file_path,
+            self.output(
+                &file_progress.file_path,
+                &format!(
+                    " ({})",
                     file_progress.file_size.to_formatted_string(&Locale::en)
-                ))
+                ),
+                false,
+                false,
             );
-            stdout().flush().unwrap();
         } else if now.duration_since(self.last_output_instant).as_millis()
             > self.refresh_rate_in_millis.into()
         {
             self.last_output_instant = now;
-            print!(
-                "{}\r",
-                self.pad_line(format!(
-                    " {} ({} - {} % - {} {})",
-                    file_progress.file_path,
+            self.output(
+                &file_progress.file_path,
+                &format!(
+                    " ({} - {} % - {} {})",
                     file_progress.file_size.to_formatted_string(&Locale::en),
                     percent.to_formatted_string(&Locale::en),
                     speed.bytes_per_interval.to_formatted_string(&Locale::en),
                     speed.unit
-                ))
+                ),
+                false,
+                false,
             );
-            stdout().flush().unwrap();
         }
 
         self.last_file_progress = FileProgress {
@@ -192,12 +222,11 @@ impl UI {
                     recv(progress_receiver) -> msg => {
                         if let Ok(args) = msg {
                             if args.bytes_processed == 0 {
-                                if file_progress.file_path != EMPTY_FILE_PATH && !skip_processed {
+                                if file_progress.file_path != EMPTY_STRING && !skip_processed {
                                     progress_line.output_processed(&file_progress.file_path);
                                 }
 
                                 skip_processed = false;
-
                                 file_progress.file_path = args.file_path;
                                 file_progress.file_size = args.file_size;
                                 file_progress.bytes_processed = 0;

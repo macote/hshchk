@@ -6,7 +6,6 @@ use cancellation::{CancellationToken, CancellationTokenSource};
 use crossbeam::crossbeam_channel::{select, unbounded, Sender};
 use regex::Regex;
 use std::env;
-use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -236,11 +235,7 @@ impl HashFileProcessor {
         let mut file_tree = FileTree::new(self);
 
         if let Err(why) = file_tree.traverse(&path, &cancellation_token) {
-            panic!(
-                "Couldn't traverse {}: {}.",
-                path.display(),
-                why.description()
-            );
+            panic!("Couldn't traverse {}: {}.", path.display(), why);
         }
 
         if let Some(progress_sender) = &self.internal_progress_sender.take() {

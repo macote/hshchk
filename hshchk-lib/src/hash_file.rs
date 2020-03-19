@@ -1,6 +1,5 @@
 use crate::{create_file, open_file};
 use std::collections::HashMap;
-use std::error::Error;
 use std::io::{
     prelude::{BufRead, Write},
     BufReader, BufWriter,
@@ -71,11 +70,7 @@ impl HashFile {
                 &file_entry.digest
             ));
             if let Err(why) = writer.write(line.as_bytes()) {
-                panic!(
-                    "Couldn't write to {}: {}.",
-                    file_path.display(),
-                    why.description()
-                )
+                panic!("Couldn't write to {}: {}.", file_path.display(), why)
             };
         }
     }

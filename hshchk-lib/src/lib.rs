@@ -4,7 +4,6 @@ use blake2::{Blake2b, Blake2s};
 use md5::Md5;
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
-use std::error::Error;
 use std::fs::File;
 use std::path::Path;
 use strum::IntoEnumIterator;
@@ -35,22 +34,14 @@ pub fn get_hash_type_from_str(type_str: &str) -> HashType {
 
 fn open_file(file_path: &Path) -> File {
     match File::open(file_path) {
-        Err(why) => panic!(
-            "Couldn't open {}: {}.",
-            file_path.display(),
-            why.description()
-        ),
+        Err(why) => panic!("Couldn't open {}: {}.", file_path.display(), why,),
         Ok(file) => file,
     }
 }
 
 fn create_file(file_path: &Path) -> File {
     match File::create(file_path) {
-        Err(why) => panic!(
-            "Couldn't create {}: {}.",
-            file_path.display(),
-            why.description()
-        ),
+        Err(why) => panic!("Couldn't create {}: {}.", file_path.display(), why),
         Ok(file) => file,
     }
 }
