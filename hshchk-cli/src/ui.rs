@@ -4,6 +4,7 @@ use hshchk_lib::hash_file_process::{
     FileProcessEntry, FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
 };
 use num_format::{Locale, ToFormattedString};
+use unicode_segmentation::UnicodeSegmentation;
 use std::convert::TryInto;
 use std::io::stdout;
 use std::io::Write;
@@ -86,9 +87,15 @@ impl ProgressLine {
         } else {
             let printed_file_path: String;
             let file_path_max_size = self.output_width - info.len();
-            if file_path_max_size < file_path.len() {
-                let offset = file_path.len() - file_path_max_size + "...".len();
-                printed_file_path = format!("{}{}", "...", &file_path[offset..]);
+            let mut file_path_graphemes = file_path.graphemes(true);
+            let file_path_len = file_path_graphemes.clone().count();
+            if file_path_max_size < file_path_len {
+                let offset = file_path_len - file_path_max_size + "...".len();
+                for _ in 0..offset {
+                    file_path_graphemes.next();
+                }
+
+                printed_file_path = format!("{}{}", "...", file_path_graphemes.as_str());
             } else {
                 printed_file_path = file_path.to_owned();
             }
@@ -107,8 +114,9 @@ impl ProgressLine {
     }
     fn pad_line(&self, line: String) -> String {
         let mut padded_line = line.clone();
-        if line.len() < self.output_width {
-            let gap = self.output_width - line.len();
+        let line_len = line.graphemes(true).count();
+        if line_len < self.output_width {
+            let gap = self.output_width - line_len;
             let pad = &repeat(" ").take(gap).collect::<String>();
             padded_line = line + pad;
         }
@@ -134,7 +142,11 @@ impl ProgressLine {
             unit: BPS,
         };
         if self.last_file_progress.file_path == file_progress.file_path {
-            percent = file_progress.bytes_processed * 100 / file_progress.file_size;
+            percent = match file_progress.file_size {
+                0 => 100,
+                _ => file_progress.bytes_processed * 100 / file_progress.file_size
+            };
+
             if file_progress.bytes_processed != self.last_file_progress.bytes_processed {
                 speed = get_speed(
                     file_progress.bytes_processed,
