@@ -5,11 +5,11 @@
 - features
   - support (md5|sha1|etc.)sum files
   - update checksum file
+  - report mode (output to file or no ui progress)
 - verbosity
   - progress loop
     - overall
       - only available when checking (hashfile)
-  - defaults to progress output?
 - error handling
   - inaccessible files and folders (lock, permission, etc.)
 - tests

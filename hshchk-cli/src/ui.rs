@@ -4,13 +4,13 @@ use hshchk_lib::hash_file_process::{
     FileProcessEntry, FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
 };
 use num_format::{Locale, ToFormattedString};
-use unicode_segmentation::UnicodeSegmentation;
 use std::convert::TryInto;
 use std::io::stdout;
 use std::io::Write;
 use std::iter::repeat;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::tty::terminal_size;
 
@@ -20,8 +20,8 @@ static KBPS: &str = "KB/s";
 static MBPS: &str = "MB/s";
 static GBPS: &str = "GB/s";
 
-const TICKER_REFRESH_IN_MILLIS: u32 = 222;
-const PROGRESS_REFRESH_IN_MILLIS: u32 = 666;
+const TICKER_REFRESH_IN_MILLIS: u32 = 111;
+const PROGRESS_REFRESH_IN_MILLIS: u32 = 333;
 
 struct Speed {
     bytes_per_interval: u64,
@@ -90,12 +90,12 @@ impl ProgressLine {
             let mut file_path_graphemes = file_path.graphemes(true);
             let file_path_len = file_path_graphemes.clone().count();
             if file_path_max_size < file_path_len {
-                let offset = file_path_len - file_path_max_size + "...".len();
+                let offset = file_path_len - file_path_max_size + "..".len();
                 for _ in 0..offset {
                     file_path_graphemes.next();
                 }
 
-                printed_file_path = format!("{}{}", "...", file_path_graphemes.as_str());
+                printed_file_path = format!("{}{}", "..", file_path_graphemes.as_str());
             } else {
                 printed_file_path = file_path.to_owned();
             }
@@ -144,7 +144,7 @@ impl ProgressLine {
         if self.last_file_progress.file_path == file_progress.file_path {
             percent = match file_progress.file_size {
                 0 => 100,
-                _ => file_progress.bytes_processed * 100 / file_progress.file_size
+                _ => file_progress.bytes_processed * 100 / file_progress.file_size,
             };
 
             if file_progress.bytes_processed != self.last_file_progress.bytes_processed {
@@ -226,9 +226,9 @@ impl UI {
         let silent_progress = silent;
 
         let message_loop = std::thread::spawn(move || {
-            let mut progress_sender_dropped = false;
             let mut error_sender_dropped = false;
             let mut warning_sender_dropped = false;
+            let mut progress_sender_dropped = silent;
             let mut senders_dropped = false;
             let mut skip_processed = false;
             let mut progress_line = ProgressLine::new();
@@ -286,8 +286,7 @@ impl UI {
                     }
                 }
 
-                senders_dropped =
-                    progress_sender_dropped && error_sender_dropped && warning_sender_dropped;
+                senders_dropped = error_sender_dropped && warning_sender_dropped && progress_sender_dropped;
             }
 
             if !silent && !skip_processed {
@@ -299,16 +298,18 @@ impl UI {
             let result = self
                 .processor
                 .process_with_cancellation_token(cancellation_token);
-            drop(progress_sender);
             drop(error_sender);
             drop(warning_sender);
+            drop(progress_sender);
             result
         });
 
         message_loop.join().unwrap();
         if !silent {
             if let Ok(result) = complete_receiver.recv() {
-                println!(" {:?} result: {:?}", process_type, result);
+                if result != HashFileProcessResult::Canceled {
+                    println!(" {:?} result: {:?}", process_type, result);
+                }
             }
         }
 
