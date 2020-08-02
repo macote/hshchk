@@ -15,11 +15,11 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         .setting(AppSettings::UnifiedHelpMessage)
         .version(crate_version!())
         .about(crate_description!())
-        .arg(Arg::with_name("directory").help(
+        .arg(Arg::with_name("directory").required(true).help(
             "Target directory. \
-             Either create a checksum file or verify files in target directory. \
-             If not specified, use current directory. The presence or absence of \
-             a checksum file in target directory dictates the operating mode.",
+             Either create a checksum file or verify files in specified directory. \
+             The presence or absence of a checksum file in target directory dictates \
+             the operating mode.",
         ))
         .arg(
             Arg::with_name("hashtype")
@@ -70,6 +70,12 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
                 .takes_value(true)
                 .value_name("pattern")
                 .help("Ignore files that matches pattern"),
+        )
+        .arg(
+            Arg::with_name("sum-format")
+                .short("u")
+                .long("sum-format")
+                .help("Use hash sum (e.g. sha1sum) file format"),
         );
 
     let matches = app.get_matches_safe()?;
@@ -86,6 +92,8 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         )));
     }
 
+    let hash_file_format = hshchk_lib::get_hash_file_format_from_arg(
+        matches.is_present("sum-format"));
     let hash_type = hshchk_lib::get_hash_type_from_str(
         &matches
             .value_of("hashtype")
@@ -102,8 +110,9 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     })
     .expect("Failed to set Ctrl-C handler.");
 
-    let processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
+    let processor = HashFileProcessor::new(HashFileProcessOptions {
         base_path: target_path,
+        hash_file_format: Some(hash_file_format),
         hash_type: Some(hash_type),
         force_create: Some(matches.is_present("create")),
         report_extra: Some(matches.is_present("extra")),
@@ -151,7 +160,7 @@ fn main() {
                 _ => (),
             }
         } else {
-            eprintln!(" Error: {}", error);
+            eprintln!(" {}", error);
         }
 
         std::process::exit(1);

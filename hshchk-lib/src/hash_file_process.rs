@@ -1,7 +1,7 @@
 use crate::block_hasher::HashProgress;
 use crate::file_tree::{FileTree, FileTreeProcessor};
 use crate::hash_file::HashFile;
-use crate::HashType;
+use crate::{HashFileFormat, HashType};
 use cancellation::{CancellationToken, CancellationTokenSource};
 use crossbeam::crossbeam_channel::{select, unbounded, Sender};
 use regex::Regex;
@@ -54,6 +54,7 @@ pub struct FileProgress {
 #[derive(Default)]
 pub struct HashFileProcessOptions<'a> {
     pub base_path: PathBuf,
+    pub hash_file_format: Option<HashFileFormat>,
     pub hash_type: Option<HashType>,
     pub force_create: Option<bool>,
     pub report_extra: Option<bool>,
@@ -65,6 +66,7 @@ pub struct HashFileProcessOptions<'a> {
 pub struct HashFileProcessor {
     hash_file: HashFile,
     hash_type: HashType,
+    hash_file_format: Option<HashFileFormat>,
     process_type: HashFileProcessType,
     hash_file_path: PathBuf,
     bin_file_name: PathBuf,
@@ -86,7 +88,7 @@ pub struct HashFileProcessor {
 }
 
 impl HashFileProcessor {
-    pub fn new_with_options(options: HashFileProcessOptions) -> Self {
+    pub fn new(options: HashFileProcessOptions) -> Self {
         let mut process_type = HashFileProcessType::Create;
         let mut actual_hash_type = options.hash_type.unwrap_or(HashType::SHA1);
         let cano_base_path = fs::canonicalize(options.base_path).unwrap();
@@ -113,6 +115,7 @@ impl HashFileProcessor {
         HashFileProcessor {
             hash_file: HashFile::new(),
             hash_type: actual_hash_type,
+            hash_file_format: options.hash_file_format,
             process_type,
             hash_file_path,
             bin_file_name,
@@ -133,14 +136,6 @@ impl HashFileProcessor {
             warning_event: None,
             complete_event: None,
         }
-    }
-    pub fn new(base_path: &Path, hash_type: HashType, force_create: bool) -> Self {
-        HashFileProcessor::new_with_options(HashFileProcessOptions {
-            base_path: base_path.to_path_buf(),
-            hash_type: Some(hash_type),
-            force_create: Some(force_create),
-            ..Default::default()
-        })
     }
     pub fn handle_error(&mut self, file_path: &Path, error_state: FileProcessState) {
         self.error_occurred = true;
@@ -257,7 +252,7 @@ impl HashFileProcessor {
                 return HashFileProcessResult::NoFilesProcessed;
             }
 
-            self.hash_file.save(&self.hash_file_path);
+            self.hash_file.save(&self.hash_file_path, self.hash_file_format.unwrap_or(HashFileFormat::HashCheck));
         } else if self.process_type == HashFileProcessType::Verify && !self.hash_file.is_empty() {
             for file_path in self.hash_file.get_file_paths() {
                 if let Some(regex) = &self.match_regex {
@@ -356,7 +351,7 @@ impl FileTreeProcessor for HashFileProcessor {
 
         let hash_file_entry = self.hash_file.get_entry(relative_file_path_str);
         if let Some(file_entry) = hash_file_entry {
-            if file_size != file_entry.size {
+            if file_size != file_entry.size.unwrap() {
                 self.handle_error(relative_file_path, FileProcessState::IncorrectSize);
                 return;
             }
@@ -407,7 +402,7 @@ impl FileTreeProcessor for HashFileProcessor {
 
         if self.process_type == HashFileProcessType::Create {
             self.hash_file
-                .add_entry(relative_file_path_str, file_size, &digest);
+                .add_entry(relative_file_path_str, Some(file_size), true, &digest);
         } else if self.process_type == HashFileProcessType::Verify {
             if let Some(file_entry) = hash_file_entry {
                 if !self.size_only && digest != file_entry.digest {

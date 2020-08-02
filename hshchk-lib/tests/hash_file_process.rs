@@ -7,10 +7,12 @@ use std::path::PathBuf;
 #[path = "../src/test/mod.rs"]
 mod test;
 
-static FILE_CHECKSUM_SHA1: &str = "hshchk.sha1";
-static FILE_CHECKSUM_MD5: &str = "hshchk.md5";
-static FILE_DATA_SHA1: &str = "file|4|a17c9aaa61e80a1bf71d0d850af4e5baa9800bbd\n";
-static FILE_DATA_MD5: &str = "file|4|8d777f385d3dfec8815d20f7496026dc\n";
+static HASHCHECK_SHA1_NAME: &str = "hshchk.sha1";
+static HASHCHECK_MD5_NAME: &str = "hshchk.md5";
+static HASHSUM_SHA1_NAME: &str = "hshchk.sha1sum";
+static HASHCHECK_SHA1_CONTENT: &str = "file|4|a17c9aaa61e80a1bf71d0d850af4e5baa9800bbd\n";
+static HASHCHECK_MD5_CONTENT: &str = "file|4|8d777f385d3dfec8815d20f7496026dc\n";
+static HASHSUM_SHA1_CONTENT: &str = "a17c9aaa61e80a1bf71d0d850af4e5baa9800bbd *file\n";
 
 #[test]
 fn hash_file_process_create_no_files_processed() {
@@ -26,10 +28,10 @@ fn hash_file_process_create() {
     let _ = test::create_file_with_content(&dir, "file", "data");
     let mut processor = HashFileProcessor::new(&dir, HashType::SHA1, false);
     assert_eq!(processor.process(), HashFileProcessResult::Success);
-    let checksum_file = dir.join(FILE_CHECKSUM_SHA1);
+    let checksum_file = dir.join(HASHCHECK_SHA1_NAME);
     assert_eq!(
         test::get_file_string_content(&checksum_file),
-        FILE_DATA_SHA1
+        HASHCHECK_SHA1_CONTENT
     );
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -40,8 +42,8 @@ fn hash_file_process_create_md5() {
     let _ = test::create_file_with_content(&dir, "file", "data");
     let mut processor = HashFileProcessor::new(&dir, HashType::MD5, false);
     assert_eq!(processor.process(), HashFileProcessResult::Success);
-    let checksum_file = dir.join(FILE_CHECKSUM_MD5);
-    assert_eq!(test::get_file_string_content(&checksum_file), FILE_DATA_MD5);
+    let checksum_file = dir.join(HASHCHECK_MD5_NAME);
+    assert_eq!(test::get_file_string_content(&checksum_file), HASHCHECK_MD5_CONTENT);
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
 
@@ -49,12 +51,12 @@ fn hash_file_process_create_md5() {
 fn hash_file_process_create_force() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "data");
-    let checksum_file = test::create_file_with_content(&dir, FILE_CHECKSUM_SHA1, "test");
+    let checksum_file = test::create_file_with_content(&dir, HASHCHECK_SHA1_NAME, "test");
     let mut processor = HashFileProcessor::new(&dir, HashType::SHA1, true);
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     assert_eq!(
         test::get_file_string_content(&checksum_file),
-        FILE_DATA_SHA1
+        HASHCHECK_SHA1_CONTENT
     );
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -70,10 +72,10 @@ fn hash_file_process_create_ignore() {
         ..Default::default()
     });
     assert_eq!(processor.process(), HashFileProcessResult::Success);
-    let checksum_file = dir.join(FILE_CHECKSUM_SHA1);
+    let checksum_file = dir.join(HASHCHECK_SHA1_NAME);
     assert_eq!(
         test::get_file_string_content(&checksum_file),
-        FILE_DATA_SHA1
+        HASHCHECK_SHA1_CONTENT
     );
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -89,10 +91,10 @@ fn hash_file_process_create_match() {
         ..Default::default()
     });
     assert_eq!(processor.process(), HashFileProcessResult::Success);
-    let checksum_file = dir.join(FILE_CHECKSUM_SHA1);
+    let checksum_file = dir.join(HASHCHECK_SHA1_NAME);
     assert_eq!(
         test::get_file_string_content(&checksum_file),
-        FILE_DATA_SHA1
+        HASHCHECK_SHA1_CONTENT
     );
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -101,7 +103,7 @@ fn hash_file_process_create_match() {
 fn hash_file_process_verify() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "data");
-    let _ = test::create_file_with_content(&dir, FILE_CHECKSUM_SHA1, FILE_DATA_SHA1);
+    let _ = test::create_file_with_content(&dir, HASHCHECK_SHA1_NAME, HASHCHECK_SHA1_CONTENT);
     let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: dir.clone(),
         ..Default::default()
@@ -119,7 +121,7 @@ fn hash_file_process_verify() {
 #[test]
 fn hash_file_process_verify_missing() {
     let dir = test::create_tmp_dir();
-    let _ = test::create_file_with_content(&dir, FILE_CHECKSUM_SHA1, FILE_DATA_SHA1);
+    let _ = test::create_file_with_content(&dir, HASHCHECK_SHA1_NAME, HASHCHECK_SHA1_CONTENT);
     let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: dir.clone(),
         ..Default::default()
@@ -143,7 +145,7 @@ fn hash_file_process_verify_missing() {
 fn hash_file_process_verify_incorrect_size() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "datadata");
-    let _ = test::create_file_with_content(&dir, FILE_CHECKSUM_SHA1, FILE_DATA_SHA1);
+    let _ = test::create_file_with_content(&dir, HASHCHECK_SHA1_NAME, HASHCHECK_SHA1_CONTENT);
     let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: dir.clone(),
         ..Default::default()
@@ -167,7 +169,7 @@ fn hash_file_process_verify_incorrect_size() {
 fn hash_file_process_verify_incorrect_hash() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "tada");
-    let _ = test::create_file_with_content(&dir, FILE_CHECKSUM_SHA1, FILE_DATA_SHA1);
+    let _ = test::create_file_with_content(&dir, HASHCHECK_SHA1_NAME, HASHCHECK_SHA1_CONTENT);
     let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: dir.clone(),
         ..Default::default()
@@ -191,7 +193,7 @@ fn hash_file_process_verify_incorrect_hash() {
 fn hash_file_process_verify_report_extra() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "data");
-    let _ = test::create_file_with_content(&dir, FILE_CHECKSUM_SHA1, FILE_DATA_SHA1);
+    let _ = test::create_file_with_content(&dir, HASHCHECK_SHA1_NAME, HASHCHECK_SHA1_CONTENT);
     let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: dir.clone(),
         report_extra: Some(true),
@@ -221,7 +223,7 @@ fn hash_file_process_verify_report_extra() {
 fn hash_file_process_verify_size_only() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "tada");
-    let _ = test::create_file_with_content(&dir, FILE_CHECKSUM_SHA1, FILE_DATA_SHA1);
+    let _ = test::create_file_with_content(&dir, HASHCHECK_SHA1_NAME, HASHCHECK_SHA1_CONTENT);
     let mut processor = HashFileProcessor::new_with_options(HashFileProcessOptions {
         base_path: dir.clone(),
         size_only: Some(true),
