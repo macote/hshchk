@@ -286,7 +286,8 @@ impl UI {
                     }
                 }
 
-                senders_dropped = progress_sender_dropped && error_sender_dropped && warning_sender_dropped;
+                senders_dropped =
+                    progress_sender_dropped && error_sender_dropped && warning_sender_dropped;
             }
 
             if !silent && !skip_processed {

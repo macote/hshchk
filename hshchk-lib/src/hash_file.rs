@@ -65,7 +65,7 @@ impl HashFile {
                 }
                 HashFileFormat::HashSum => match content.find(' ') {
                     Some(space_position) => {
-                        let digest = &content[..space_position - 1];
+                        let digest = &content[..space_position];
                         let file_name = &content[space_position + 2..];
                         let binary = content.as_bytes()[space_position + 1] as char == '*';
                         if file_name.len() > MAX_PATH_SIZE {
@@ -75,10 +75,10 @@ impl HashFile {
                             );
                         }
 
-                        self.add_entry(&file_name, Some(0), binary, &digest.to_lowercase());
+                        self.add_entry(&file_name, None, binary, &digest.to_lowercase());
                     }
                     _ => continue,
-                }
+                },
             }
         }
     }

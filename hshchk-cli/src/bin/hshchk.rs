@@ -92,8 +92,8 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         )));
     }
 
-    let hash_file_format = hshchk_lib::get_hash_file_format_from_arg(
-        matches.is_present("sum-format"));
+    let hash_file_format =
+        hshchk_lib::get_hash_file_format_from_arg(matches.is_present("sum-format"));
     let hash_type = hshchk_lib::get_hash_type_from_str(
         &matches
             .value_of("hashtype")

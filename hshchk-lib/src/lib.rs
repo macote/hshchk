@@ -55,7 +55,7 @@ pub fn get_hash_file_format_from_arg(sum_format_present: bool) -> HashFileFormat
 
 fn open_file(file_path: &Path) -> File {
     match File::open(file_path) {
-        Err(why) => panic!("Couldn't open {}: {}.", file_path.display(), why,),
+        Err(why) => panic!("Couldn't open {}: {}.", file_path.display(), why),
         Ok(file) => file,
     }
 }
