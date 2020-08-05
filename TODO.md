@@ -6,9 +6,9 @@
   - specify hash file
   - update checksum file
   - report mode (output to file or no ui progress)
-- progress loop
+- tree progress
   - overall
-    - only available when checking (hashfile)
+    - only available when checking (info from hashfile)
 - error handling
   - inaccessible files and folders (lock, permission, etc.)
 - tests

@@ -111,6 +111,7 @@ mod tests {
     use crate::hash_file::HashFile;
     use cancellation::CancellationTokenSource;
     use crossbeam::crossbeam_channel::unbounded;
+    use hash_file::HashFileEntry;
     use std::fs;
 
     // block hasher
@@ -271,15 +272,30 @@ mod tests {
     #[test]
     fn hash_file_is_not_empty() {
         let mut hash_file = HashFile::new();
-        hash_file.add_entry("filename", Some(0), false, "hash");
+        hash_file.add_entry(HashFileEntry {
+            file_path: "filename".into(),
+            size: None,
+            binary: false,
+            digest: "hash".into(),
+        });
         assert!(!hash_file.is_empty());
     }
 
     #[test]
     fn hash_file_get_file_paths() {
         let mut hash_file = HashFile::new();
-        hash_file.add_entry("filename1", Some(1), false, "hash1");
-        hash_file.add_entry("filename2", Some(2), false, "hash2");
+        hash_file.add_entry(HashFileEntry {
+            file_path: "filename1".into(),
+            size: None,
+            binary: false,
+            digest: "hash1".into(),
+        });
+        hash_file.add_entry(HashFileEntry {
+            file_path: "filename2".into(),
+            size: None,
+            binary: false,
+            digest: "hash2".into(),
+        });
         let mut filenames = hash_file.get_file_paths();
         filenames.sort();
         assert_eq!("filename1filename2", filenames.join(""));
@@ -288,7 +304,12 @@ mod tests {
     #[test]
     fn hash_file_remove_entry() {
         let mut hash_file = HashFile::new();
-        hash_file.add_entry("filename", Some(0), false, "hash");
+        hash_file.add_entry(HashFileEntry {
+            file_path: "filename".into(),
+            size: None,
+            binary: false,
+            digest: "hash".into(),
+        });
         hash_file.remove_entry("filename");
         assert!(hash_file.is_empty());
     }

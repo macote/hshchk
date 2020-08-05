@@ -22,9 +22,9 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
              the operating mode.",
         ))
         .arg(
-            Arg::with_name("hashtype")
+            Arg::with_name("type")
                 .short("t")
-                .long("hashtype")
+                .long("type")
                 .takes_value(true)
                 .value_name("type")
                 .possible_values(&hshchk_lib::get_hash_types())
@@ -61,7 +61,7 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
                 .long("match")
                 .takes_value(true)
                 .value_name("pattern")
-                .help("Process files that matches pattern"),
+                .help("Process files that matches regex pattern"),
         )
         .arg(
             Arg::with_name("ignore")
@@ -69,21 +69,18 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
                 .long("ignore")
                 .takes_value(true)
                 .value_name("pattern")
-                .help("Ignore files that matches pattern"),
+                .help("Ignore files that matches regex pattern"),
         )
         .arg(
-            Arg::with_name("sum-format")
+            Arg::with_name("sum")
                 .short("u")
-                .long("sum-format")
+                .long("sum")
                 .help("Use hash sum (e.g. sha1sum) file format"),
         );
 
     let matches = app.get_matches_safe()?;
 
-    let directory = match matches.value_of("directory") {
-        Some(directory) => directory,
-        None => ".",
-    };
+    let directory = matches.value_of("directory").unwrap();
     let target_path = PathBuf::from(&directory);
     if !target_path.is_dir() {
         return Err(Box::new(Error::new(
@@ -92,13 +89,9 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         )));
     }
 
-    let hash_file_format =
-        hshchk_lib::get_hash_file_format_from_arg(matches.is_present("sum-format"));
+    let hash_file_format = hshchk_lib::get_hash_file_format_from_arg(matches.is_present("sum"));
     let hash_type = hshchk_lib::get_hash_type_from_str(
-        &matches
-            .value_of("hashtype")
-            .unwrap_or("SHA1")
-            .to_uppercase(),
+        &matches.value_of("type").unwrap_or("SHA1").to_uppercase(),
     );
 
     let cancellation_token_source = CancellationTokenSource::new();
@@ -146,9 +139,7 @@ fn main() {
     #[cfg(windows)]
     let _ = ansi_term::enable_ansi_support();
 
-    let result = run();
-
-    if let Err(error) = result {
+    if let Err(error) = run() {
         if let Some(clap_error) = error.downcast_ref::<clap::Error>() {
             eprint!(" {}", clap_error); // `clap` errors already have newlines
 

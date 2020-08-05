@@ -1,6 +1,6 @@
 use crate::block_hasher::HashProgress;
 use crate::file_tree::{FileTree, FileTreeProcessor};
-use crate::hash_file::HashFile;
+use crate::hash_file::{HashFile, HashFileEntry};
 use crate::{HashFileFormat, HashType};
 use cancellation::{CancellationToken, CancellationTokenSource};
 use crossbeam::crossbeam_channel::{select, unbounded, Sender};
@@ -413,8 +413,12 @@ impl FileTreeProcessor for HashFileProcessor {
         }
 
         if self.process_type == HashFileProcessType::Create {
-            self.hash_file
-                .add_entry(relative_file_path_str, Some(file_size), true, &digest);
+            self.hash_file.add_entry(HashFileEntry {
+                file_path: relative_file_path_str.to_string(),
+                size: Some(file_size),
+                binary: true,
+                digest,
+            });
         } else if self.process_type == HashFileProcessType::Verify {
             if let Some(file_entry) = hash_file_entry {
                 if !self.size_only && digest != file_entry.digest {
