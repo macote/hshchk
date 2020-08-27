@@ -3,3 +3,6 @@ rustflags = [
     "-Ctarget-cpu=x86-64",
     "-Ctarget-feature=+crt-static",
 ]
+
+[target.armv7-unknown-linux-gnueabihf]
+linker = "arm-linux-gnueabihf-gcc"
