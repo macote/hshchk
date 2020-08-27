@@ -64,7 +64,7 @@ struct ProgressLine {
     output_width: usize,
     refresh_rate_in_millis: u32,
     last_output_instant: Instant,
-    last_file_progress: FileProgress,
+    last_output_file_progress: FileProgress,
 }
 
 impl ProgressLine {
@@ -74,12 +74,20 @@ impl ProgressLine {
             output_width: (output_width.0 - 1) as usize,
             refresh_rate_in_millis: PROGRESS_REFRESH_IN_MILLIS,
             last_output_instant: Instant::now(),
-            last_file_progress: FileProgress {
+            last_output_file_progress: FileProgress {
                 ..Default::default()
             },
         }
     }
-    fn output(&self, file_path: &str, info: &str, new_line: bool, error: bool) {
+    fn output(
+        &mut self,
+        file_path: &str,
+        file_size: u64,
+        bytes_processed: u64,
+        info: &str,
+        new_line: bool,
+        error: bool,
+    ) {
         if self.output_width < 48 {
             if error {
                 eprintln!(" {}\r", self.pad_line(format!("{}{}", file_path, info)));
@@ -110,6 +118,12 @@ impl ProgressLine {
             }
         }
 
+        self.last_output_instant = Instant::now();
+        self.last_output_file_progress = FileProgress {
+            file_path: file_path.into(),
+            file_size,
+            bytes_processed,
+        };
         stdout().flush().unwrap();
     }
     fn pad_line(&self, line: String) -> String {
@@ -123,16 +137,18 @@ impl ProgressLine {
 
         padded_line
     }
-    pub fn output_error(&self, file_process_entry: &FileProcessEntry) {
+    pub fn output_error(&mut self, file_process_entry: &FileProcessEntry) {
         self.output(
             file_process_entry.file_path.to_str().unwrap(),
+            0,
+            0,
             &format!(" => {:?}", file_process_entry.state),
             true,
             true,
         );
     }
-    pub fn output_processed(&self, file_path: &str) {
-        self.output(file_path, EMPTY_STRING, true, false);
+    pub fn output_processed(&mut self, file_path: &str) {
+        self.output(file_path, 0, 0, EMPTY_STRING, true, false);
     }
     pub fn output_progress(&mut self, file_progress: &FileProgress) {
         let now = Instant::now();
@@ -141,27 +157,26 @@ impl ProgressLine {
             bytes_per_interval: 0,
             unit: BPS,
         };
-        if self.last_file_progress.file_path == file_progress.file_path {
+        if self.last_output_file_progress.file_path == file_progress.file_path {
             percent = match file_progress.file_size {
                 0 => 100,
                 _ => file_progress.bytes_processed * 100 / file_progress.file_size,
             };
 
-            if file_progress.bytes_processed != self.last_file_progress.bytes_processed {
+            if file_progress.bytes_processed != self.last_output_file_progress.bytes_processed {
                 speed = get_speed(
                     file_progress.bytes_processed,
-                    self.last_file_progress.bytes_processed,
+                    self.last_output_file_progress.bytes_processed,
                     now.duration_since(self.last_output_instant).as_millis(),
                 );
             }
         }
 
-        let mut output = false;
         if file_progress.bytes_processed == 0 {
-            output = true;
-            self.last_output_instant = now;
             self.output(
                 &file_progress.file_path,
+                file_progress.file_size,
+                file_progress.bytes_processed,
                 &format!(
                     " ({})",
                     file_progress.file_size.to_formatted_string(&Locale::en)
@@ -172,9 +187,10 @@ impl ProgressLine {
         } else if now.duration_since(self.last_output_instant).as_millis()
             > self.refresh_rate_in_millis.into()
         {
-            output = true;
             self.output(
                 &file_progress.file_path,
+                file_progress.file_size,
+                file_progress.bytes_processed,
                 &format!(
                     " ({} - {} % - {} {})",
                     file_progress.file_size.to_formatted_string(&Locale::en),
@@ -185,15 +201,6 @@ impl ProgressLine {
                 false,
                 false,
             );
-        }
-
-        if output {
-            self.last_output_instant = now;
-            self.last_file_progress = FileProgress {
-                file_path: file_progress.file_path.clone(),
-                file_size: file_progress.file_size,
-                bytes_processed: file_progress.bytes_processed,
-            };
         }
     }
 }
