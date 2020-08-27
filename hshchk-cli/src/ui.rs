@@ -156,7 +156,9 @@ impl ProgressLine {
             }
         }
 
+        let mut output = false;
         if file_progress.bytes_processed == 0 {
+            output = true;
             self.last_output_instant = now;
             self.output(
                 &file_progress.file_path,
@@ -170,7 +172,7 @@ impl ProgressLine {
         } else if now.duration_since(self.last_output_instant).as_millis()
             > self.refresh_rate_in_millis.into()
         {
-            self.last_output_instant = now;
+            output = true;
             self.output(
                 &file_progress.file_path,
                 &format!(
@@ -185,11 +187,14 @@ impl ProgressLine {
             );
         }
 
-        self.last_file_progress = FileProgress {
-            file_path: file_progress.file_path.clone(),
-            file_size: file_progress.file_size,
-            bytes_processed: file_progress.bytes_processed,
-        };
+        if output {
+            self.last_output_instant = now;
+            self.last_file_progress = FileProgress {
+                file_path: file_progress.file_path.clone(),
+                file_size: file_progress.file_size,
+                bytes_processed: file_progress.bytes_processed,
+            };
+        }
     }
 }
 
