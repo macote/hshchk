@@ -90,11 +90,16 @@ impl ProgressLine {
     ) {
         if self.output_width < 48 {
             if error {
-                eprintln!(" {}\r", self.pad_line(format!("{}{}", file_path, info)));
+                eprintln!(" {}\r", self.pad_line(format!("[{}] {}", info, file_path)));
             }
         } else {
+            let mut info_output = String::new();
+            if info.len() > 0 {
+                info_output = format!("[{}] ", info);
+            }
+
             let printed_file_path: String;
-            let file_path_max_size = self.output_width - info.len();
+            let file_path_max_size = self.output_width - info_output.len();
             let mut file_path_graphemes = file_path.graphemes(true);
             let file_path_len = file_path_graphemes.clone().count();
             if file_path_max_size < file_path_len {
@@ -108,7 +113,7 @@ impl ProgressLine {
                 printed_file_path = file_path.to_owned();
             }
 
-            let line_output = self.pad_line(format!("{}{}", printed_file_path, info));
+            let line_output = self.pad_line(format!("{}{}", info_output, printed_file_path));
             if error {
                 eprintln!(" {}\r", line_output);
             } else if new_line {
@@ -142,7 +147,7 @@ impl ProgressLine {
             file_process_entry.file_path.to_str().unwrap(),
             0,
             0,
-            &format!(" => {:?}", file_process_entry.state),
+            &format!("{:?}", file_process_entry.state),
             true,
             true,
         );
@@ -177,10 +182,7 @@ impl ProgressLine {
                 &file_progress.file_path,
                 file_progress.file_size,
                 file_progress.bytes_processed,
-                &format!(
-                    " ({})",
-                    file_progress.file_size.to_formatted_string(&Locale::en)
-                ),
+                &file_progress.file_size.to_formatted_string(&Locale::en),
                 false,
                 false,
             );
@@ -192,7 +194,7 @@ impl ProgressLine {
                 file_progress.file_size,
                 file_progress.bytes_processed,
                 &format!(
-                    " ({} - {} % - {} {})",
+                    "{} - {} % - {} {}",
                     file_progress.file_size.to_formatted_string(&Locale::en),
                     percent.to_formatted_string(&Locale::en),
                     speed.bytes_per_interval.to_formatted_string(&Locale::en),
@@ -245,9 +247,7 @@ impl UI {
             let mut skip_processed = false;
             let mut progress_line = ProgressLine::new();
             let mut file_progress = FileProgress {
-                file_path: String::from(""),
-                file_size: 0,
-                bytes_processed: 0,
+                ..Default::default()
             };
             let ticker = tick(Duration::from_millis(TICKER_REFRESH_IN_MILLIS as u64));
 
@@ -326,6 +326,7 @@ impl UI {
             }
         }
 
+        drop(complete_sender);
         process.join().unwrap()
     }
 }

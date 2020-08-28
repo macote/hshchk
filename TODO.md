@@ -7,6 +7,7 @@
   - update checksum file
   - report mode (output to file or no ui progress)
 - tree progress
+  - single line progress mode
   - overall
     - only available when checking (info from hashfile)
 - error handling
