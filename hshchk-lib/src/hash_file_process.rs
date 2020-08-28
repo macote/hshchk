@@ -473,7 +473,7 @@ fn get_existing_file_hash_type(
         hash_file_path.pop();
         for hash_type in HashType::iter() {
             if let Some(hash_file_format) = hash_file_exists(&mut hash_file_path, hash_type) {
-                return Some((desired_hash_type, hash_file_format));
+                return Some((hash_type, hash_file_format));
             }
 
             hash_file_path.pop();
