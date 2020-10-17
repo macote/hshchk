@@ -5,7 +5,7 @@ use md5::Md5;
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, MAIN_SEPARATOR};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 mod block_hasher;
@@ -14,7 +14,7 @@ mod file_tree;
 mod hash_file;
 pub mod hash_file_process;
 
-#[derive(Copy, Clone, PartialEq, Debug, EnumString, EnumIter, IntoStaticStr)]
+#[derive(Clone, Copy, Debug, EnumIter, EnumString, IntoStaticStr, PartialEq)]
 pub enum HashType {
     MD5,
     SHA1,
@@ -22,6 +22,19 @@ pub enum HashType {
     SHA512,
     BLAKE2B,
     BLAKE2S,
+}
+
+#[derive(Clone, Copy, Debug, EnumIter, EnumString, IntoStaticStr, PartialEq)]
+pub enum HashFileFormat {
+    HashCheck, // filepath|size|hash
+    HashSum,   // hash<space><space/asterisk>filepath
+}
+
+pub fn replaceable_separator() -> &'static str {
+    match MAIN_SEPARATOR {
+        '/' => "\\",
+        _ => "/",
+    }
 }
 
 pub fn get_hash_types() -> Vec<&'static str> {
@@ -32,9 +45,17 @@ pub fn get_hash_type_from_str(type_str: &str) -> HashType {
     type_str.parse().unwrap()
 }
 
+pub fn get_hash_file_format_from_arg(sum_format_present: bool) -> HashFileFormat {
+    if sum_format_present {
+        HashFileFormat::HashSum
+    } else {
+        HashFileFormat::HashCheck
+    }
+}
+
 fn open_file(file_path: &Path) -> File {
     match File::open(file_path) {
-        Err(why) => panic!("Couldn't open {}: {}.", file_path.display(), why,),
+        Err(why) => panic!("Couldn't open {}: {}.", file_path.display(), why),
         Ok(file) => file,
     }
 }
@@ -90,6 +111,7 @@ mod tests {
     use crate::hash_file::HashFile;
     use cancellation::CancellationTokenSource;
     use crossbeam::crossbeam_channel::unbounded;
+    use hash_file::HashFileEntry;
     use std::fs;
 
     // block hasher
@@ -167,7 +189,7 @@ mod tests {
         hash_file.load(&file);
         assert_eq!(1, hash_file.get_file_paths().len());
         let entry = hash_file.get_entry("filename").unwrap();
-        assert_eq!(0, entry.size);
+        assert_eq!(0, entry.size.unwrap());
         assert_eq!("hash", entry.digest);
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
@@ -179,10 +201,10 @@ mod tests {
         hash_file.load(&file);
         assert_eq!(2, hash_file.get_file_paths().len());
         let entry = hash_file.get_entry("filename1").unwrap();
-        assert_eq!(1, entry.size);
+        assert_eq!(1, entry.size.unwrap());
         assert_eq!("hash1", entry.digest);
         let entry = hash_file.get_entry("filename2").unwrap();
-        assert_eq!(2, entry.size);
+        assert_eq!(2, entry.size.unwrap());
         assert_eq!("hash2", entry.digest);
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
@@ -225,7 +247,7 @@ mod tests {
 
     #[test]
     fn hash_file_load_failed_hash() {
-        let file = test::create_tmp_file(&(String::from("filename|0|") + &"a".repeat(257)));
+        let file = test::create_tmp_file(&(String::from("filename|0|") + &"a".repeat(1025)));
         let file_clone = file.clone();
         let mut hash_file = HashFile::new();
         assert_eq!(
@@ -235,7 +257,7 @@ mod tests {
             .err()
             .and_then(|a| a
                 .downcast_ref::<String>()
-                .map(|s| { s == "Hash length must be less than 257 characters." })),
+                .map(|s| { s == "Hash length must be less than 1025 characters." })),
             Some(true)
         );
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
@@ -250,15 +272,30 @@ mod tests {
     #[test]
     fn hash_file_is_not_empty() {
         let mut hash_file = HashFile::new();
-        hash_file.add_entry("filename", 0, "hash");
+        hash_file.add_entry(HashFileEntry {
+            file_path: "filename".into(),
+            size: None,
+            binary: false,
+            digest: "hash".into(),
+        });
         assert!(!hash_file.is_empty());
     }
 
     #[test]
     fn hash_file_get_file_paths() {
         let mut hash_file = HashFile::new();
-        hash_file.add_entry("filename1", 1, "hash1");
-        hash_file.add_entry("filename2", 2, "hash2");
+        hash_file.add_entry(HashFileEntry {
+            file_path: "filename1".into(),
+            size: None,
+            binary: false,
+            digest: "hash1".into(),
+        });
+        hash_file.add_entry(HashFileEntry {
+            file_path: "filename2".into(),
+            size: None,
+            binary: false,
+            digest: "hash2".into(),
+        });
         let mut filenames = hash_file.get_file_paths();
         filenames.sort();
         assert_eq!("filename1filename2", filenames.join(""));
@@ -267,7 +304,12 @@ mod tests {
     #[test]
     fn hash_file_remove_entry() {
         let mut hash_file = HashFile::new();
-        hash_file.add_entry("filename", 0, "hash");
+        hash_file.add_entry(HashFileEntry {
+            file_path: "filename".into(),
+            size: None,
+            binary: false,
+            digest: "hash".into(),
+        });
         hash_file.remove_entry("filename");
         assert!(hash_file.is_empty());
     }

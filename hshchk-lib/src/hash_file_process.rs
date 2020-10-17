@@ -1,7 +1,7 @@
 use crate::block_hasher::HashProgress;
 use crate::file_tree::{FileTree, FileTreeProcessor};
-use crate::hash_file::HashFile;
-use crate::HashType;
+use crate::hash_file::{HashFile, HashFileEntry};
+use crate::{HashFileFormat, HashType};
 use cancellation::{CancellationToken, CancellationTokenSource};
 use crossbeam::crossbeam_channel::{select, unbounded, Sender};
 use regex::Regex;
@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use strum::IntoEnumIterator;
 
-static HSHCHK_BASE_FILE_NAME: &str = "hshchk";
+static HASHCHECK_BASE_FILE_NAME: &str = "hshchk";
+static HASHSUM_SUFFIX: &str = "SUMS";
 const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: usize = 2_097_152;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -54,6 +55,7 @@ pub struct FileProgress {
 #[derive(Default)]
 pub struct HashFileProcessOptions<'a> {
     pub base_path: PathBuf,
+    pub hash_file_format: Option<HashFileFormat>,
     pub hash_type: Option<HashType>,
     pub force_create: Option<bool>,
     pub report_extra: Option<bool>,
@@ -65,6 +67,7 @@ pub struct HashFileProcessOptions<'a> {
 pub struct HashFileProcessor {
     hash_file: HashFile,
     hash_type: HashType,
+    hash_file_format: Option<HashFileFormat>,
     process_type: HashFileProcessType,
     hash_file_path: PathBuf,
     bin_file_name: PathBuf,
@@ -86,20 +89,26 @@ pub struct HashFileProcessor {
 }
 
 impl HashFileProcessor {
-    pub fn new_with_options(options: HashFileProcessOptions) -> Self {
+    pub fn new(options: HashFileProcessOptions) -> Self {
         let mut process_type = HashFileProcessType::Create;
-        let mut actual_hash_type = options.hash_type.unwrap_or(HashType::SHA1);
+        let mut hash_type = options.hash_type.unwrap_or(HashType::SHA1);
+        let mut hash_file_format = options.hash_file_format;
         let cano_base_path = fs::canonicalize(options.base_path).unwrap();
         if !options.force_create.unwrap_or_default() {
-            if let Some(existing_hash_type) =
-                get_existing_file_hash_type(&cano_base_path, actual_hash_type)
+            if let Some((existing_hash_type, existing_hash_file_format)) =
+                get_existing_file_hash_type(&cano_base_path, hash_type)
             {
-                actual_hash_type = existing_hash_type;
+                hash_type = existing_hash_type;
+                hash_file_format = Some(existing_hash_file_format);
                 process_type = HashFileProcessType::Verify;
             }
         }
 
-        let hash_file_name = get_hash_file_name(actual_hash_type);
+        let hash_file_name = match hash_file_format {
+            Some(HashFileFormat::HashSum) => get_hashsum_file_name(hash_type),
+            _ => get_hashcheck_file_name(hash_type),
+        };
+
         let hash_file_path = cano_base_path.join(hash_file_name);
         let bin_path = env::current_exe().unwrap();
         let mut bin_file_name = PathBuf::from(bin_path.file_name().unwrap());
@@ -112,7 +121,8 @@ impl HashFileProcessor {
 
         HashFileProcessor {
             hash_file: HashFile::new(),
-            hash_type: actual_hash_type,
+            hash_type,
+            hash_file_format,
             process_type,
             hash_file_path,
             bin_file_name,
@@ -133,14 +143,6 @@ impl HashFileProcessor {
             warning_event: None,
             complete_event: None,
         }
-    }
-    pub fn new(base_path: &Path, hash_type: HashType, force_create: bool) -> Self {
-        HashFileProcessor::new_with_options(HashFileProcessOptions {
-            base_path: base_path.to_path_buf(),
-            hash_type: Some(hash_type),
-            force_create: Some(force_create),
-            ..Default::default()
-        })
     }
     pub fn handle_error(&mut self, file_path: &Path, error_state: FileProcessState) {
         self.error_occurred = true;
@@ -257,7 +259,10 @@ impl HashFileProcessor {
                 return HashFileProcessResult::NoFilesProcessed;
             }
 
-            self.hash_file.save(&self.hash_file_path);
+            self.hash_file.save(
+                &self.hash_file_path,
+                self.hash_file_format.unwrap_or(HashFileFormat::HashCheck),
+            );
         } else if self.process_type == HashFileProcessType::Verify && !self.hash_file.is_empty() {
             for file_path in self.hash_file.get_file_paths() {
                 if let Some(regex) = &self.match_regex {
@@ -356,9 +361,11 @@ impl FileTreeProcessor for HashFileProcessor {
 
         let hash_file_entry = self.hash_file.get_entry(relative_file_path_str);
         if let Some(file_entry) = hash_file_entry {
-            if file_size != file_entry.size {
-                self.handle_error(relative_file_path, FileProcessState::IncorrectSize);
-                return;
+            if let Some(file_entry_size) = file_entry.size {
+                if file_size != file_entry_size {
+                    self.handle_error(relative_file_path, FileProcessState::IncorrectSize);
+                    return;
+                }
             }
         } else if relative_file_path == self.bin_file_name {
             return; // Skip app binary file
@@ -406,8 +413,12 @@ impl FileTreeProcessor for HashFileProcessor {
         }
 
         if self.process_type == HashFileProcessType::Create {
-            self.hash_file
-                .add_entry(relative_file_path_str, file_size, &digest);
+            self.hash_file.add_entry(HashFileEntry {
+                file_path: relative_file_path_str.to_string(),
+                size: Some(file_size),
+                binary: true,
+                digest,
+            });
         } else if self.process_type == HashFileProcessType::Verify {
             if let Some(file_entry) = hash_file_entry {
                 if !self.size_only && digest != file_entry.digest {
@@ -422,26 +433,47 @@ impl FileTreeProcessor for HashFileProcessor {
     }
 }
 
-fn get_hash_file_name(hash_type: HashType) -> PathBuf {
+fn get_hashcheck_file_name(hash_type: HashType) -> PathBuf {
     let hash_type_str: &str = hash_type.into();
-    let hash_file = Path::new(HSHCHK_BASE_FILE_NAME);
+    let hash_file = Path::new(HASHCHECK_BASE_FILE_NAME);
     hash_file.with_extension(hash_type_str.to_lowercase())
 }
 
-fn get_existing_file_hash_type(base_path: &Path, desired_hash_type: HashType) -> Option<HashType> {
-    let mut hash_file_path = PathBuf::from(base_path);
-    let hash_file_exists = |hash_file_path: &mut PathBuf, hash_type: HashType| -> bool {
-        hash_file_path.push(get_hash_file_name(hash_type));
-        hash_file_path.is_file()
-    };
+fn get_hashsum_file_name(hash_type: HashType) -> PathBuf {
+    let hash_type_str: &str = hash_type.into();
+    let hash_file_name = hash_type_str.to_uppercase() + HASHSUM_SUFFIX.into();
+    let hash_file = Path::new(&hash_file_name);
+    hash_file.to_path_buf()
+}
 
-    if hash_file_exists(&mut hash_file_path, desired_hash_type) {
-        return Some(desired_hash_type);
+fn hash_file_exists(hash_file_path: &mut PathBuf, hash_type: HashType) -> Option<HashFileFormat> {
+    hash_file_path.push(get_hashcheck_file_name(hash_type));
+    if hash_file_path.is_file() {
+        return Some(HashFileFormat::HashCheck);
+    }
+
+    hash_file_path.pop();
+    hash_file_path.push(get_hashsum_file_name(hash_type));
+    if hash_file_path.is_file() {
+        return Some(HashFileFormat::HashSum);
+    }
+
+    None
+}
+
+fn get_existing_file_hash_type(
+    base_path: &Path,
+    desired_hash_type: HashType,
+) -> Option<(HashType, HashFileFormat)> {
+    let mut hash_file_path = PathBuf::from(base_path);
+
+    if let Some(hash_file_format) = hash_file_exists(&mut hash_file_path, desired_hash_type) {
+        return Some((desired_hash_type, hash_file_format));
     } else {
         hash_file_path.pop();
         for hash_type in HashType::iter() {
-            if hash_file_exists(&mut hash_file_path, hash_type) {
-                return Some(hash_type);
+            if let Some(hash_file_format) = hash_file_exists(&mut hash_file_path, hash_type) {
+                return Some((hash_type, hash_file_format));
             }
 
             hash_file_path.pop();
