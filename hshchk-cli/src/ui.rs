@@ -90,12 +90,16 @@ impl ProgressLine {
     ) {
         if self.output_width < 48 {
             if error {
-                eprintln!(" {}\r", self.pad_line(format!("[{}] {}", info, file_path)));
+                eprintln!(" {}\r", self.pad_line(format!("{} => {}", file_path, info)));
             }
         } else {
             let mut info_output = String::new();
             if info.len() > 0 {
-                info_output = format!("[{}] ", info);
+                if error {
+                    info_output = format!(" => {}", info);
+                } else {
+                    info_output = format!(" ({})", info);
+                }
             }
 
             let printed_file_path: String;
@@ -113,7 +117,7 @@ impl ProgressLine {
                 printed_file_path = file_path.to_owned();
             }
 
-            let line_output = self.pad_line(format!("{}{}", info_output, printed_file_path));
+            let line_output = self.pad_line(format!("{}{}", printed_file_path, info_output));
             if error {
                 eprintln!(" {}\r", line_output);
             } else if new_line {
@@ -194,7 +198,7 @@ impl ProgressLine {
                 file_progress.file_size,
                 file_progress.bytes_processed,
                 &format!(
-                    "{} - {} % - {} {}",
+                    "{}; {} %; {} {}",
                     file_progress.file_size.to_formatted_string(&Locale::en),
                     percent.to_formatted_string(&Locale::en),
                     speed.bytes_per_interval.to_formatted_string(&Locale::en),
