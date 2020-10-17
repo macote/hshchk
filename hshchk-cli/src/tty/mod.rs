@@ -1,25 +1,5 @@
-// Most of the code in for the `terminal_size()` function taken from:
+// Code taken from:
 // https://github.com/eminence/terminal-size
-
-//! A simple utility for getting the size of a terminal.
-//!
-//! Supports both Linux and Windows, but help is needed to test other platforms
-//!
-//! Tested on Rust Stable (1.4), Beta (1.5), and Nightly (1.6)
-//!
-//! # Example
-//!
-//! ```
-//! use terminal_size::{Width, Height, terminal_size};
-//!
-//! let size = terminal_size();
-//! if let Some((Width(w), Height(h))) = size {
-//!     println!("Your terminal is {} cols wide and {} lines tall", w, h);
-//! } else {
-//!     println!("Unable to get terminal size");
-//! }
-//! ```
-//!
 
 #[derive(Debug)]
 pub struct Width(pub u16);

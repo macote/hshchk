@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.com/macote/hshchk.svg?branch=master)](https://travis-ci.com/macote/hshchk)
 
-# hshchk (Hash Check)
+# hshchk
 
 `hshchk` lets you create or verify checksums on folder files recursively.
 
@@ -9,8 +9,8 @@
 ## dpkg
 
 ``` bash
-wget "https://github.com/macote/hshchk/releases/download/v0.1.0/hshchk_0.1.0_amd64.deb"
-sudo dpkg -i hshchk_0.1.0_amd64.deb
+wget "https://github.com/macote/hshchk/releases/download/v1.0.0/hshchk_1.0.0_amd64.deb"
+sudo dpkg -i hshchk_1.0.0_amd64.deb
 ```
 
 ## Other
