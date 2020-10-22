@@ -2,75 +2,45 @@ language: rust
 cache: cargo
 matrix:
   include:
-    # Stable channel.
-    - os: linux
-      rust: stable
-      env: TARGET=x86_64-unknown-linux-gnu
-    - os: linux
-      rust: stable
-      env: TARGET=x86_64-unknown-linux-musl
-    - os: osx
-      rust: stable
-      env: TARGET=x86_64-apple-darwin
-# some tests are failing on windows target:
-#   thread 'tests::file_hash_bytes_processed_event_handler_defined' panicked at 'Failed to remove test directory.: Os { code: 145, kind: Other, message: "The directory is not empty." }', src\libcore\result.rs:1084:5
-#    - os: windows
-#      rust: stable
-#      env: TARGET=x86_64-pc-windows-msvc
-
+  - os: linux
+    rust: stable
+    env: TARGET=x86_64-unknown-linux-gnu
+  - os: linux
+    rust: stable
+    env: TARGET=x86_64-unknown-linux-musl
+  - os: osx
+    rust: stable
+    env: TARGET=x86_64-apple-darwin
 addons:
   apt:
     packages:
-      # needed to build deb packages
       - fakeroot
-
 env:
   global:
-    # Default target on travis-ci.
-    # Used as conditional check in the install stage
     - HOST=x86_64-unknown-linux-gnu
-    # Used on the deployment script
     - PROJECT_NAME=hshchk
-
+    - secure: KODZZX7oleteUjn+DEIAqpR8kROaiCITiAEc03QDI7QAXsTMKTIFf8puyQhkMDXMYVCLNTWeOJIPlE8+hsW9vdirIElu2VqNhExxmiSVa/dEgWhegoYOcB0Ln2sZ3ATFK3DxTL9H7aqUHZyHj3NFQBE+vPfxIdbu0Mnur3xfomjyknpcEY7t2W6R45eML/qrS6xY4HrEcUiqLYxmh5UO/Rvb7TkT+5octzc9Rr7AkgjYX9yJv04t4LEba+gslUN7b3GzRdiuZqyeQOv9FWLS4mHQrtJF1ywICM7Yu13EKKCrotnSwoot44IUeLDuhuwUUZCrOpfmFKDHxn9359+AAdMLVyNoTnvKyris3UbWpAraqSgU6kuVvyXwS4Od5SG/aNKOBZTN3q2Y78+SKrONP5FrOzdzfXRdXagMYNtG+LnD/Y2/EdP334li+oZjnCCy5ysaH3XQmn/jNvrddpQ5CWRxSPwg2KM3Cnpt0SsfFXTIcq3Py0AW+JNVuzzy60HsQ5cw1gFTrXeCK3qrHYDx1Ifj7+e0F6gNrej65O97BAk67pUxHIudg3wh99MF3/9Owgd5OmZ2bgZGMexJtOYWzEuEksQ6a0yOTrRsw3uw5qMvgyfODp3HH1WNX6/DZOlTrG6dO+uEKit8f9dHZGAIthZJ/aJE+50Vp/NhCX2aE+E=
 install:
-  # prevent target re-add error from rustup
-  - if [[ $TRAVIS_OS_NAME = linux && $HOST != $TARGET ]]; then rustup target add $TARGET; fi
-
+  - if [[ $TRAVIS_OS_NAME = linux && $HOST != $TARGET ]]; then rustup target add $TARGET;
+    fi
 script:
-  # Incorporate TARGET env var to the build and test process
   - cargo build --target $TARGET --verbose
   - cargo test --target $TARGET --verbose
-
 before_deploy:
   - bash ci/before_deploy.bash
-
 deploy:
   provider: releases
-  # NOTE updating the `api_key.secure`
-  # - go to: https://github.com/settings/tokens/new
-  # - generate new token using `public_repo` scope
-  # - encrypt it using: `travis encrypt API_KEY_HERE`
-  # - paste the output below
   api_key:
-    secure: Ee4dLjmQXx9SCLW/lY+L+FxF4sMW9LVkBvLkO7Z79XrEFRRBK4XoODfkUrFQeDj5thpWh7kFFmBiaRFWs5uvJka3HMb2jdmI8WCCtA9rahbRjuKBMkENpOT2YuYpgorEENZnEl4aPLtkvcldnqrn5y6rhnptPQYcoXNYVzLk3EmAc3tHSeJDJ+3goUxzUOTPZqPQ90LvVFA0DP8s97gAJoYAxnUKX1eL3Xwsb5SGdQqQz+39ukfVX0suXvF+6DKh9UGUyC7fdeM4pseLqYhUv2ec0+M15Y7bQpger/WiqAWxqlW68wcUcBIjcR46RBiIh9nORIwmwjZiqPoPhZ4jW8GRzhCT3bo6zSrMkL4pUhI6Ws/YhLe7FyFDulFxyYeGeVkquv2Te9jle91rsjaGB8lv5R/NOYydVdhX1NeT12jyZpbtDTM5pkH24WvtCQ8BMYD7VuId9Cjp1dVdFeQh7YdL2IvrW+TV4x4TNQv6zEb/CrKKar0Qq9sayEie4IcPr8fnw9u7sQMXtbM7QsvwehSlXUAXxEbzhvjH14HMTg3B9plqL6dJaJYqZFN7m9QZZ/hmaFn6fu2eCvFsBycOYNaKve012eVR5K9/A2OfbqfKaT07GlltpcfUUV+Hhh1XjcS+9bHS8aR6G74wAGknSp8IVHfThHGYfGVvLbbQddw=
-  # for uploading multiple files
-  file_glob: true
-  # NOTE explanation on each env variable
-  # - PROJECT_NAME: name of the project, set on the `env.global` above
-  # - TRAVIS_TAG: tag name that the build is being deployed for, usually the version number
-  # - TARGET: target triple of the build
+    secure: mjKaIUhrbx7/Pqbbk6xWSStocdKF7RWVmU+jb11dyRFfff+hGIm1woFUY4FD+NyQJ5j8gL8puW1zmeN48qhLdnos8Hl6iEsNMeydXVuVyGv4vRxH2VRvBz1EbyofPG7ilTjs6IPPYM9iZ6aAx3ZSAQ5m/tJ1ytbwwHOML1KclOWA97I/tG61pGMhZKLAkKPnbdRFvwnn8LtZoUuVpKC9hCW4ZS2trX6Yk6/QYtU5nEyqPmHMRC7EjpMR34F7kR+z8Z98bAwu2P2nYLVxSt/J1YMAcQeKDnBch7fcv9NA4ivXlAlmQZud0BIFAprblJ1E+WkGr05JJ1Z6DXDeH2KwgJzV+bL7gKOowmMgVFENdIg1KlMe5umf6Lbq3tcIb1AcxWbOfPZ5WE58uNgSSz4/S9WnXJyQk3YMHZI3ciW1CfGaSwJW/IUP4ch1jmNp7X0LK4I4t9qbMqVFLz6wupTeZnPSNbAfRQKkelQbHJMM8l1MIFwH39kq5c0rAaiZO+0r3UY1ryy6H3tVXFpUuAse432cXeoUcX7yiFIbwfRZ5YR+XGiVFI/6ZuK+Y4o5I+0ItqqP7tOdSNafWiKmh0flRBptX4/7lV4rQLpnSABOhUBRsl7+mcuC+38stsjev+Ddc5yallubLzARq5Y8cys9OV4biKAQoiENyZpOKyasDY4=
+  file_glob: 'true'
   file:
     - $PROJECT_NAME-$TRAVIS_TAG-$TARGET.*
     - $PROJECT_NAME*.deb
-  # don't delete artifacts from previous stage
-  skip_cleanup: true
-  draft: true
+  draft: 'true'
   on:
-    # deploy only if we push a tag
-    tags: true
-    # deploy only on stable channel that has TARGET env variable sets
+    repo: macote/hshchk
     condition: $TRAVIS_RUST_VERSION = stable && $TARGET != "x86_64-pc-windows-msvc"
-
+  skip_cleanup: 'true'
 notifications:
   email:
     on_success: never
