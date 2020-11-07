@@ -141,7 +141,7 @@ fn parse_hash_sum_entry(line: &str) -> Option<HashFileEntry> {
             Some(HashFileEntry {
                 file_path: file_path.to_string(),
                 size: None,
-                binary: binary,
+                binary,
                 digest: digest.to_lowercase(),
             })
         }

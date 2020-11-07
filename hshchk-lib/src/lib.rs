@@ -22,6 +22,7 @@ pub enum HashType {
     SHA512,
     BLAKE2B,
     BLAKE2S,
+    BLAKE3,
 }
 
 #[derive(Clone, Copy, Debug, EnumIter, EnumString, IntoStaticStr, PartialEq)]
@@ -91,6 +92,10 @@ fn get_blake2s_file_hasher(file_path: &Path) -> FileHash<Blake2s> {
     FileHash::new(file_path)
 }
 
+fn get_blake3_file_hasher(file_path: &Path) -> FileHash<blake3::Hasher> {
+    FileHash::new(file_path)
+}
+
 fn get_file_hasher<'a>(hash_type: HashType, file_path: &'a Path) -> Box<dyn BlockHasher + 'a> {
     match hash_type {
         HashType::MD5 => Box::new(get_md5_file_hasher(file_path)),
@@ -99,6 +104,7 @@ fn get_file_hasher<'a>(hash_type: HashType, file_path: &'a Path) -> Box<dyn Bloc
         HashType::SHA512 => Box::new(get_sha512_file_hasher(file_path)),
         HashType::BLAKE2B => Box::new(get_blake2b_file_hasher(file_path)),
         HashType::BLAKE2S => Box::new(get_blake2s_file_hasher(file_path)),
+        HashType::BLAKE3 => Box::new(get_blake3_file_hasher(file_path)),
     }
 }
 
@@ -110,7 +116,7 @@ mod tests {
     use super::*;
     use crate::hash_file::HashFile;
     use cancellation::CancellationTokenSource;
-    use crossbeam::crossbeam_channel::unbounded;
+    use crossbeam::channel::unbounded;
     use hash_file::HashFileEntry;
     use std::fs;
 

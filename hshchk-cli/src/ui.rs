@@ -1,5 +1,5 @@
 use cancellation::CancellationToken;
-use crossbeam::crossbeam_channel::{select, tick, unbounded};
+use crossbeam::channel::{select, tick, unbounded};
 use hshchk_lib::hash_file_process::{
     FileProcessEntry, FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
 };

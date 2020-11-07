@@ -1,4 +1,4 @@
-use crossbeam::crossbeam_channel::unbounded;
+use crossbeam::channel::unbounded;
 use hshchk_lib::hash_file_process::*;
 use hshchk_lib::{HashFileFormat, HashType};
 use std::fs;
@@ -17,12 +17,11 @@ static HASHSUM_SHA1_CONTENT: &str = "a17c9aaa61e80a1bf71d0d850af4e5baa9800bbd *f
 #[test]
 fn hash_file_process_create_no_files_processed() {
     let dir = test::create_tmp_dir();
-    let mut processor = HashFileProcessor::new(
-        HashFileProcessOptions {
-            base_path: dir.clone(),
-            hash_type: Some(HashType::SHA1),
-            ..Default::default()
-        });
+    let mut processor = HashFileProcessor::new(HashFileProcessOptions {
+        base_path: dir.clone(),
+        hash_type: Some(HashType::SHA1),
+        ..Default::default()
+    });
     assert_eq!(processor.process(), HashFileProcessResult::NoFilesProcessed);
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
@@ -31,12 +30,11 @@ fn hash_file_process_create_no_files_processed() {
 fn hash_file_process_create() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "data");
-    let mut processor = HashFileProcessor::new(
-        HashFileProcessOptions {
-            base_path: dir.clone(),
-            hash_type: Some(HashType::SHA1),
-            ..Default::default()
-        });
+    let mut processor = HashFileProcessor::new(HashFileProcessOptions {
+        base_path: dir.clone(),
+        hash_type: Some(HashType::SHA1),
+        ..Default::default()
+    });
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     let checksum_file = dir.join(HASHCHECK_SHA1_NAME);
     assert_eq!(
@@ -50,15 +48,17 @@ fn hash_file_process_create() {
 fn hash_file_process_create_md5() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "data");
-    let mut processor = HashFileProcessor::new(
-        HashFileProcessOptions {
-            base_path: dir.clone(),
-            hash_type: Some(HashType::MD5),
-            ..Default::default()
-        });
+    let mut processor = HashFileProcessor::new(HashFileProcessOptions {
+        base_path: dir.clone(),
+        hash_type: Some(HashType::MD5),
+        ..Default::default()
+    });
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     let checksum_file = dir.join(HASHCHECK_MD5_NAME);
-    assert_eq!(test::get_file_string_content(&checksum_file), HASHCHECK_MD5_CONTENT);
+    assert_eq!(
+        test::get_file_string_content(&checksum_file),
+        HASHCHECK_MD5_CONTENT
+    );
     fs::remove_dir_all(dir).expect("Failed to remove test directory.");
 }
 
@@ -67,13 +67,12 @@ fn hash_file_process_create_force() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "data");
     let checksum_file = test::create_file_with_content(&dir, HASHCHECK_SHA1_NAME, "test");
-    let mut processor = HashFileProcessor::new(
-        HashFileProcessOptions {
-            base_path: dir.clone(),
-            hash_type: Some(HashType::SHA1),
-            force_create: Some(true),
-            ..Default::default()
-        });
+    let mut processor = HashFileProcessor::new(HashFileProcessOptions {
+        base_path: dir.clone(),
+        hash_type: Some(HashType::SHA1),
+        force_create: Some(true),
+        ..Default::default()
+    });
 
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     assert_eq!(
@@ -307,13 +306,12 @@ fn hash_file_process_verify_match() {
 fn hash_file_process_hashsum_create() {
     let dir = test::create_tmp_dir();
     let _ = test::create_file_with_content(&dir, "file", "data");
-    let mut processor = HashFileProcessor::new(
-        HashFileProcessOptions {
-            base_path: dir.clone(),
-            hash_type: Some(HashType::SHA1),
-            hash_file_format: Some(HashFileFormat::HashSum),
-            ..Default::default()
-        });
+    let mut processor = HashFileProcessor::new(HashFileProcessOptions {
+        base_path: dir.clone(),
+        hash_type: Some(HashType::SHA1),
+        hash_file_format: Some(HashFileFormat::HashSum),
+        ..Default::default()
+    });
     assert_eq!(processor.process(), HashFileProcessResult::Success);
     let checksum_file = dir.join(HASHSUM_SHA1_NAME);
     assert_eq!(

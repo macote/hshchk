@@ -1,5 +1,5 @@
 use cancellation::CancellationToken;
-use crossbeam::crossbeam_channel::Sender;
+use crossbeam::channel::Sender;
 use std::sync::Arc;
 
 pub struct HashProgress {

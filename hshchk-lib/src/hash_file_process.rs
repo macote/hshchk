@@ -3,7 +3,7 @@ use crate::file_tree::{FileTree, FileTreeProcessor};
 use crate::hash_file::{HashFile, HashFileEntry};
 use crate::{HashFileFormat, HashType};
 use cancellation::{CancellationToken, CancellationTokenSource};
-use crossbeam::crossbeam_channel::{select, unbounded, Sender};
+use crossbeam::channel::{select, unbounded, Sender};
 use regex::Regex;
 use std::env;
 use std::fs;
@@ -441,7 +441,7 @@ fn get_hashcheck_file_name(hash_type: HashType) -> PathBuf {
 
 fn get_hashsum_file_name(hash_type: HashType) -> PathBuf {
     let hash_type_str: &str = hash_type.into();
-    let hash_file_name = hash_type_str.to_uppercase() + HASHSUM_SUFFIX.into();
+    let hash_file_name = hash_type_str.to_uppercase() + HASHSUM_SUFFIX;
     let hash_file = Path::new(&hash_file_name);
     hash_file.to_path_buf()
 }

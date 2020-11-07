@@ -1,6 +1,6 @@
 use crate::block_hasher::{BlockHasher, HashProgress};
 use crate::open_file;
-use crossbeam::crossbeam_channel::Sender;
+use crossbeam::channel::Sender;
 use digest::Digest;
 use std::io::{BufReader, Read};
 use std::path::Path;
@@ -40,10 +40,10 @@ impl<T: Digest> BlockHasher for FileHash<T> {
         adaptor.read_to_end(&mut self.buffer).unwrap()
     }
     fn update(&mut self, byte_count: usize) {
-        self.hasher.input(&self.buffer[..byte_count]);
+        self.hasher.update(&self.buffer[..byte_count]);
     }
     fn digest(&mut self) -> String {
-        hex::encode(self.hasher.result_reset())
+        hex::encode(self.hasher.finalize_reset())
     }
     fn set_bytes_processed_event_sender(&mut self, sender: Sender<HashProgress>) {
         self.set_bytes_processed_event_sender_with_bytes_processed_notification_block_size(
