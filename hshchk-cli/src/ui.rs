@@ -1,16 +1,11 @@
 use cancellation::CancellationToken;
-use crossbeam::channel::{select, tick, unbounded};
+use crossbeam::channel::{select, unbounded};
 use hshchk_lib::hash_file_process::{
     FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
 };
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::line_output::LineOutput;
-
-static EMPTY_STRING: &str = "";
-
-const TICKER_REFRESH_IN_MILLIS: u32 = 144;
 
 pub struct UI {
     processor: HashFileProcessor,
@@ -42,8 +37,6 @@ impl UI {
                 .set_complete_event_sender(complete_sender.clone());
         }
 
-        let silent_progress = silent;
-
         let message_loop = std::thread::spawn(move || {
             let mut error_sender_dropped = false;
             let mut warning_sender_dropped = false;
@@ -54,19 +47,13 @@ impl UI {
             let mut file_progress = FileProgress {
                 ..Default::default()
             };
-            let ticker = tick(Duration::from_millis(TICKER_REFRESH_IN_MILLIS as u64));
 
             while !senders_dropped {
                 select! {
-                    recv(ticker) -> _ => {
-                        if !silent_progress {
-                            line_output.write_progress(&file_progress);
-                        }
-                    },
                     recv(progress_receiver) -> msg => {
                         if let Ok(args) = msg {
                             if args.bytes_processed == 0 {
-                                if file_progress.file_path != EMPTY_STRING && !skip_processed {
+                                if file_progress.file_path != "" && !skip_processed {
                                     line_output.write_processed(&file_progress.file_path);
                                 }
 
@@ -74,11 +61,12 @@ impl UI {
                                 file_progress.file_path = args.file_path;
                                 file_progress.file_size = args.file_size;
                                 file_progress.bytes_processed = 0;
-                                line_output.write_progress(&file_progress);
                             }
                             else {
                                 file_progress.bytes_processed = args.bytes_processed;
                             }
+
+                            line_output.write_progress(&file_progress);
                         }
                         else {
                             progress_sender_dropped = true;
