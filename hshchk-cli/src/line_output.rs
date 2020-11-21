@@ -10,7 +10,7 @@ use crate::tty::terminal_size;
 
 static EMPTY_STRING: &str = "";
 
-const PROGRESS_REFRESH_IN_MILLIS: u32 = 333;
+const PROGRESS_REFRESH_IN_MILLIS: u32 = 233;
 
 pub struct LineOutput {
     output_width: usize,
@@ -162,5 +162,8 @@ impl LineOutput {
                 false,
             );
         }
+    }
+    pub fn write_result(&mut self, result: String) {
+        println!("{}\r", self.pad_line(result));
     }
 }

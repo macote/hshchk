@@ -9,7 +9,8 @@ use std::time::Duration;
 use crate::line_output::LineOutput;
 
 static EMPTY_STRING: &str = "";
-const TICKER_REFRESH_IN_MILLIS: u32 = 111;
+
+const TICKER_REFRESH_IN_MILLIS: u32 = 144;
 
 pub struct UI {
     processor: HashFileProcessor,
@@ -125,7 +126,8 @@ impl UI {
         if !silent {
             if let Ok(result) = complete_receiver.recv() {
                 if result != HashFileProcessResult::Canceled {
-                    println!("{:?} result: {:?}", process_type, result);
+                    let mut line_output = LineOutput::new();
+                    line_output.write_result(format!("{:?} result: {:?}", process_type, result));
                 }
             }
         }
