@@ -8,7 +8,7 @@ repository = "https://github.com/macote/hshchk"
 readme = "README.md"
 license = "MIT"
 edition = "2018"
-keywords = ["cli", "checksum", "hash", "file", "folder", "tree", "recursive"]
+keywords = ["cli", "checksum", "hash", "file", "folder", "tree", "recursive", "sum", "md5", "sha", "blake"]
 
 [[bin]]
 doctest = false

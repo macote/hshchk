@@ -141,7 +141,7 @@ fn main() {
 
     if let Err(error) = run() {
         if let Some(clap_error) = error.downcast_ref::<clap::Error>() {
-            eprint!(" {}", clap_error); // `clap` errors already have newlines
+            eprint!("{}", clap_error); // `clap` errors already have newlines
 
             match clap_error.kind {
                 clap::ErrorKind::HelpDisplayed | clap::ErrorKind::VersionDisplayed => {
@@ -151,7 +151,7 @@ fn main() {
                 _ => (),
             }
         } else {
-            eprintln!(" {}", error);
+            eprintln!("{}", error);
         }
 
         std::process::exit(1);
