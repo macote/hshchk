@@ -1,4 +1,11 @@
 name: release
+
+env:
+  PROJECT_NAME: hshchk
+  PROJECT_DESC: "A command-line file tree hash checker."
+  PROJECT_MAINTAINER: "Marc-André Côté <mac@live.ca>"
+  PROJECT_HOMEPAGE: "https://github.com/macote/hshchk"
+
 on:
   push:
     tags:
@@ -6,10 +13,7 @@ on:
 jobs:
   create-release:
     name: create-release
-    runs-on: ubuntu-latest
-    # env:
-      # Set to force version number, e.g., when no tag exists.
-      # VERSION: TEST-0.0.0
+    runs-on: ubuntu-18.04
     steps:
       - name: Create artifacts directory
         run: mkdir artifacts
@@ -17,11 +21,8 @@ jobs:
       - name: Get the release version from the tag
         if: env.VERSION == ''
         run: |
-          # Apparently, this is the right way to get a tag name. Really?
-          #
-          # See: https://github.community/t5/GitHub-Actions/How-to-get-just-the-tag-name/m-p/32167/highlight/true#M1027
-          echo "::set-env name=VERSION::${GITHUB_REF#refs/tags/}"
-          echo "version is: ${{ env.VERSION }}"
+          version=$(echo ${{ github.event.ref }} | cut -d/ -f3)
+          echo "VERSION=$version" >> $GITHUB_ENV
 
       - name: Create GitHub release
         id: release
@@ -31,6 +32,7 @@ jobs:
         with:
           tag_name: ${{ env.VERSION }}
           release_name: ${{ env.VERSION }}
+          draft: true
 
       - name: Save release upload URL to artifact
         run: echo "${{ steps.release.outputs.upload_url }}" > artifacts/release-upload-url
@@ -49,45 +51,54 @@ jobs:
     needs: ['create-release']
     runs-on: ${{ matrix.os }}
     env:
-      # For some builds, we use cross to test on 32-bit and big-endian
-      # systems.
       CARGO: cargo
-      # When CARGO is set to CROSS, this is set to `--target matrix.target`.
       TARGET_FLAGS:
-      # When CARGO is set to CROSS, TARGET_DIR includes matrix.target.
       TARGET_DIR: ./target
-      # Emit backtraces on panics.
       RUST_BACKTRACE: 1
-      # Build static releases with PCRE2.
-      PCRE2_SYS_STATIC: 1
     strategy:
       matrix:
-        build: [linux, linux-arm, macos, win-msvc, win-gnu, win32-msvc]
+        build: [linux, linux-musl, linux-arm, linux-armv7, linux-aarch64, macos, win-msvc, win-gnu, win32-msvc, win32-gnu]
         include:
         - build: linux
           os: ubuntu-18.04
-          rust: nightly
+          rust: stable
+          target: x86_64-unknown-linux-gnu
+        - build: linux-musl
+          os: ubuntu-18.04
+          rust: stable
           target: x86_64-unknown-linux-musl
         - build: linux-arm
           os: ubuntu-18.04
-          rust: nightly
+          rust: stable
           target: arm-unknown-linux-gnueabihf
+        - build: linux-armv7
+          os: ubuntu-18.04
+          rust: stable
+          target: armv7-unknown-linux-gnueabihf
+        - build: linux-aarch64
+          os: ubuntu-18.04
+          rust: stable
+          target: aarch64-unknown-linux-gnu
         - build: macos
           os: macos-latest
-          rust: nightly
+          rust: stable
           target: x86_64-apple-darwin
         - build: win-msvc
           os: windows-2019
-          rust: nightly
+          rust: stable
           target: x86_64-pc-windows-msvc
         - build: win-gnu
           os: windows-2019
-          rust: nightly-x86_64-gnu
+          rust: stable-x86_64-gnu
           target: x86_64-pc-windows-gnu
         - build: win32-msvc
           os: windows-2019
-          rust: nightly
+          rust: stable
           target: i686-pc-windows-msvc
+        - build: win32-gnu
+          os: windows-2019
+          rust: stable-x86_64-gnu
+          target: i686-pc-windows-gnu
 
     steps:
     - name: Checkout repository
@@ -97,13 +108,7 @@ jobs:
 
     - name: Install packages (Ubuntu)
       if: matrix.os == 'ubuntu-18.04'
-      run: |
-        ci/ubuntu-install-packages
-
-    - name: Install packages (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        ci/macos-install-packages
+      run: sudo apt-get install -y --no-install-recommends liblz4-tool musl-tools
 
     - name: Install Rust
       uses: actions-rs/toolchain@v1
@@ -114,14 +119,11 @@ jobs:
         target: ${{ matrix.target }}
 
     - name: Use Cross
-      # if: matrix.os != 'windows-2019'
       run: |
-        # FIXME: to work around bugs in latest cross release, install master.
-        # See: https://github.com/rust-embedded/cross/issues/357
-        cargo install --git https://github.com/rust-embedded/cross
-        echo "::set-env name=CARGO::cross"
-        echo "::set-env name=TARGET_FLAGS::--target ${{ matrix.target }}"
-        echo "::set-env name=TARGET_DIR::./target/${{ matrix.target }}"
+        cargo install cross
+        echo "CARGO=cross" >> $GITHUB_ENV
+        echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
+        echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
 
     - name: Show command used for Cargo
       run: |
@@ -139,50 +141,112 @@ jobs:
       shell: bash
       run: |
         release_upload_url="$(cat artifacts/release-upload-url)"
-        echo "::set-env name=RELEASE_UPLOAD_URL::$release_upload_url"
+        echo "RELEASE_UPLOAD_URL=$release_upload_url" >> $GITHUB_ENV
         echo "release upload url: $RELEASE_UPLOAD_URL"
         release_version="$(cat artifacts/release-version)"
-        echo "::set-env name=RELEASE_VERSION::$release_version"
+        echo "RELEASE_VERSION=$release_version" >> $GITHUB_ENV
         echo "release version: $RELEASE_VERSION"
 
     - name: Build release binary
-      run: ${{ env.CARGO }} build --verbose --release --features pcre2 ${{ env.TARGET_FLAGS }}
+      run: ${{ env.CARGO }} build --verbose --release ${{ env.TARGET_FLAGS }}
 
     - name: Strip release binary (linux and macos)
       if: matrix.build == 'linux' || matrix.build == 'macos'
-      run: strip "target/${{ matrix.target }}/release/rg"
+      run: strip "target/${{ matrix.target }}/release/${{ env.PROJECT_NAME }}"
 
-    - name: Strip release binary (arm)
-      if: matrix.build == 'linux-arm'
-      run: |
-        docker run --rm -v \
-          "$PWD/target:/target:Z" \
-          rustembedded/cross:arm-unknown-linux-gnueabihf \
-          arm-linux-gnueabihf-strip \
-          /target/arm-unknown-linux-gnueabihf/release/rg
-
-    - name: Build archive
+    - name: Build archive and deb package
       shell: bash
       run: |
-        outdir="$(ci/cargo-out-dir "${{ env.TARGET_DIR }}")"
-        staging="hshchk-${{ env.RELEASE_VERSION }}-${{ matrix.target }}"
-        mkdir -p "$staging"/{complete,doc}
+        staging="${{ env.PROJECT_NAME }}-${{ env.RELEASE_VERSION }}-${{ matrix.target }}"
+        mkdir -p "$staging"
 
-        cp {README.md,COPYING,UNLICENSE,LICENSE-MIT} "$staging/"
-        cp {CHANGELOG.md,FAQ.md,GUIDE.md} "$staging/doc/"
-        cp "$outdir"/{rg.bash,rg.fish,_rg.ps1} "$staging/complete/"
-        cp complete/_rg "$staging/complete/"
+        cp {README.md,LICENSE} "$staging/"
 
         if [ "${{ matrix.os }}" = "windows-2019" ]; then
-          cp "target/${{ matrix.target }}/release/rg.exe" "$staging/"
+          cp "target/release/${{ env.PROJECT_NAME }}.exe" "$staging/"
           7z a "$staging.zip" "$staging"
-          echo "::set-env name=ASSET::$staging.zip"
+          echo "ASSET=$staging.zip" >> $GITHUB_ENV
         else
-          # The man page is only generated on Unix systems. ¯\_(ツ)_/¯
-          cp "$outdir"/rg.1 "$staging/doc/"
-          cp "target/${{ matrix.target }}/release/rg" "$staging/"
+          cp "target/${{ matrix.target }}/release/${{ env.PROJECT_NAME }}" "$staging/"
           tar czf "$staging.tar.gz" "$staging"
-          echo "::set-env name=ASSET::$staging.tar.gz"
+          echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
+        fi
+
+        if [ "${{ matrix.os }}" = "ubuntu-18.04" ] && [[ ${{ matrix.target }} == x86_64* ]]; then
+          dpkg="hshchk-${{ env.RELEASE_VERSION }}-${{ matrix.target }}.deb"
+          echo "DPKG=$dpkg" >> $GITHUB_ENV
+          dir="$staging/dpkg"
+          mkdir -p "$dir"
+
+          basename=${PROJECT_NAME}
+          conflicts=${PROJECT_NAME}-musl
+          case ${{ matrix.target }} in *-musl) basename=${PROJECT_NAME}-musl ; conflicts=${PROJECT_NAME} ;; esac;
+
+          case ${{ matrix.target }} in
+            arm-*-linux-*hf) arch=armhf ;;
+            x86_64-*-linux-*) arch=amd64 ;;
+          esac;
+
+          # Binary
+          install -Dm755 'target/${{ matrix.target }}/release/${{ env.PROJECT_NAME }}${{ steps.vars.outputs.EXE_suffix }}' "$dir/usr/bin/${{ env.PROJECT_NAME }}${{ steps.vars.outputs.EXE_suffix }}"
+          if [ -n "${{ steps.vars.outputs.STRIP }}" ]; then "${{ steps.vars.outputs.STRIP }}" "$dir/usr/bin/${{ env.PROJECT_NAME }}${{ steps.vars.outputs.EXE_suffix }}" ; fi
+
+          # README and LICENSE
+          install -Dm644 "README.md" "$dir/usr/share/doc/${{ env.PROJECT_NAME }}/README.md"
+          install -Dm644 "LICENSE" "$dir/usr/share/doc/${{ env.PROJECT_NAME }}/LICENSE"
+
+          cat > "$dir/usr/share/doc/${{ env.PROJECT_NAME }}/copyright" <<EOF
+        Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+        Upstream-Name: ${{ env.PROJECT_NAME }}
+        Source: ${{ env.PROJECT_HOMEPAGE }}
+
+        Files: *
+        Copyright: ${{ env.PROJECT_MAINTAINER }}
+        License: MIT
+
+        License: MIT
+         Permission is hereby granted, free of charge, to any
+         person obtaining a copy of this software and associated
+         documentation files (the "Software"), to deal in the
+         Software without restriction, including without
+         limitation the rights to use, copy, modify, merge,
+         publish, distribute, sublicense, and/or sell copies of
+         the Software, and to permit persons to whom the Software
+         is furnished to do so, subject to the following
+         conditions:
+         .
+         The above copyright notice and this permission notice
+         shall be included in all copies or substantial portions
+         of the Software.
+         .
+         THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+         ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+         TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+         PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+         SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+         CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+         OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+         IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+         DEALINGS IN THE SOFTWARE.
+        EOF
+
+          # control file
+          mkdir -p "$dir/DEBIAN"
+          cat > "$dir/DEBIAN/control" <<EOF
+        Package: $basename
+        Version: ${{ env.RELEASE_VERSION }}
+        Section: utils
+        Priority: optional
+        Maintainer: ${{ env.PROJECT_MAINTAINER }}
+        Homepage: ${{ env.PROJECT_HOMEPAGE }}
+        Architecture: $arch
+        Provides: ${{ env.PROJECT_NAME }}
+        Conflicts: $conflicts
+        Description: A command-line file tree hash checker.
+        EOF
+
+          # build dpkg
+          fakeroot dpkg-deb --build "$dir" "$dpkg"
         fi
 
     - name: Upload release archive
@@ -193,4 +257,15 @@ jobs:
         upload_url: ${{ env.RELEASE_UPLOAD_URL }}
         asset_path: ${{ env.ASSET }}
         asset_name: ${{ env.ASSET }}
+        asset_content_type: application/octet-stream
+
+    - name: Upload release deb package
+      if: matrix.os == 'ubuntu-18.04' && startsWith(matrix.target, 'x86_64')
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ env.RELEASE_UPLOAD_URL }}
+        asset_path: ${{ env.DPKG }}
+        asset_name: ${{ env.DPKG }}
         asset_content_type: application/octet-stream

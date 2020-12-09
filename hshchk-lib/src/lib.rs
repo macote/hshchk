@@ -130,6 +130,7 @@ mod tests {
         let file = test::create_tmp_file("");
         let file_hash: FileHash<Md5> = FileHash::new(&file);
         assert_eq!(file_hash.is_bytes_processed_event_sender_defined(), false);
+        drop(file_hash); // force release of file handle (Windows)
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
@@ -140,6 +141,7 @@ mod tests {
         let (sender, _) = unbounded();
         file_hash.set_bytes_processed_event_sender(sender);
         assert_eq!(file_hash.is_bytes_processed_event_sender_defined(), true);
+        drop(file_hash); // force release of file handle (Windows)
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
@@ -152,6 +154,7 @@ mod tests {
         file_hash.compute(cancellation_token.clone());
         let digest = file_hash.digest();
         assert_eq!(digest, "d41d8cd98f00b204e9800998ecf8427e");
+        drop(file_hash); // force release of file handle (Windows)
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
@@ -164,6 +167,7 @@ mod tests {
         file_hash.compute(cancellation_token.clone());
         let digest = file_hash.digest();
         assert_eq!(digest, "8d777f385d3dfec8815d20f7496026dc");
+        drop(file_hash); // force release of file handle (Windows)
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 
@@ -183,6 +187,7 @@ mod tests {
         assert_eq!(4, receiver.recv().unwrap().bytes_processed);
         assert_eq!(8, receiver.recv().unwrap().bytes_processed);
         assert!(receiver.try_recv().is_err());
+        drop(file_hash); // force release of file handle (Windows)
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
 

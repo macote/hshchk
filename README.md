@@ -1,21 +1,21 @@
-[![Build Status](https://travis-ci.com/macote/hshchk.svg?branch=master)](https://travis-ci.com/macote/hshchk)
+[![Build status](https://github.com/macote/hshchk/workflows/ci/badge.svg)](https://github.com/macote/hshchk/actions)
 
 # hshchk
 
-`hshchk` lets you create or verify checksums on folder files recursively.
+`hshchk` lets you create and verify checksums on folder files recursively.
 
 # Installation
 
-## dpkg
+## dpkg (Ubuntu 64-bit)
 
 ``` bash
-wget "https://github.com/macote/hshchk/releases/download/v1.0.0/hshchk_1.0.0_amd64.deb"
-sudo dpkg -i hshchk_1.0.0_amd64.deb
+wget "https://github.com/macote/hshchk/releases/download/1.0.0/hshchk-1.0.0-x86_64-unknown-linux-gnu.deb"
+sudo dpkg -i hshchk-1.0.0-x86_64-unknown-linux-gnu.deb
 ```
 
 ## Other
 
-Download source and build with cargo.
+Download appropriate package or download source and build with cargo.
 
 # License
 

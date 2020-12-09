@@ -1,22 +1,78 @@
-name: Rust
+name: ci
 
 on:
-  push:
-    branches: [ master ]
   pull_request:
-    branches: [ master ]
+  push:
+    branches:
+    - master
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
+  test:
+    name: test
+    env:
+      CARGO: cargo
+      TARGET_FLAGS:
+      TARGET_DIR: ./target
+      RUST_BACKTRACE: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build:
+        - stable
+        - macos
+        - win-msvc
+        - win-gnu
+        include:
+        - build: stable
+          os: ubuntu-latest
+          rust: stable
+        - build: macos
+          os: macos-latest
+          rust: nightly
+        - build: win-msvc
+          os: windows-2019
+          rust: nightly
+        - build: win-gnu
+          os: windows-2019
+          rust: nightly-x86_64-gnu
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust }}
+        profile: minimal
+        override: true
+
+    - name: Show command used for Cargo
+      run: |
+        echo "cargo command is: ${{ env.CARGO }}"
+        echo "target flag is: ${{ env.TARGET_FLAGS }}"
+
+    - name: Build hshchk and all crates
+      run: ${{ env.CARGO }} build --verbose --all ${{ env.TARGET_FLAGS }}
+
     - name: Run tests
-      run: cargo test --verbose
+      run: ${{ env.CARGO }} test --verbose --all ${{ env.TARGET_FLAGS }}
+
+  rustfmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        profile: minimal
+        components: rustfmt
+    - name: Check formatting
+      run: |
+        cargo fmt --all -- --check
