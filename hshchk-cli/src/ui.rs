@@ -5,7 +5,7 @@ use hshchk_lib::hash_file_process::{
 };
 use std::sync::Arc;
 
-use crate::line_output::LineOutput;
+use crate::output::Output;
 
 pub struct UI {
     processor: HashFileProcessor,
@@ -43,30 +43,29 @@ impl UI {
             let mut progress_sender_dropped = silent;
             let mut senders_dropped = false;
             let mut skip_processed = false;
-            let mut line_output = LineOutput::new();
+            let mut output = Output::new();
             let mut file_progress = FileProgress {
                 ..Default::default()
             };
 
+            output.write_init();
             while !senders_dropped {
                 select! {
                     recv(progress_receiver) -> msg => {
                         if let Ok(args) = msg {
                             if args.bytes_processed == 0 {
                                 if file_progress.file_path != "" && !skip_processed {
-                                    line_output.write_processed(&file_progress.file_path);
+                                    output.write_processed(&file_progress.file_path);
                                 }
 
                                 skip_processed = false;
-                                file_progress.file_path = args.file_path;
-                                file_progress.file_size = args.file_size;
-                                file_progress.bytes_processed = 0;
+                                file_progress = FileProgress { ..args };
                             }
                             else {
                                 file_progress.bytes_processed = args.bytes_processed;
                             }
 
-                            line_output.write_progress(&file_progress);
+                            output.write_progress(&file_progress);
                         }
                         else {
                             progress_sender_dropped = true;
@@ -75,7 +74,7 @@ impl UI {
                     recv(error_receiver) -> msg => {
                         if let Ok(error) = msg {
                             skip_processed = true;
-                            line_output.write_error(&error);
+                            output.write_error(&error);
                         }
                         else {
                             error_sender_dropped = true;
@@ -84,7 +83,7 @@ impl UI {
                     recv(warning_receiver) -> msg => {
                         if let Ok(warning) = msg {
                             skip_processed = true;
-                            line_output.write_error(&warning);
+                            output.write_error(&warning);
                         } else {
                             warning_sender_dropped = true;
                         }
@@ -96,7 +95,7 @@ impl UI {
             }
 
             if !silent && !skip_processed {
-                line_output.write_processed(&file_progress.file_path);
+                output.write_processed(&file_progress.file_path);
             }
         });
 
@@ -113,9 +112,11 @@ impl UI {
         message_loop.join().unwrap();
         if !silent {
             if let Ok(result) = complete_receiver.recv() {
-                if result != HashFileProcessResult::Canceled {
-                    let mut line_output = LineOutput::new();
-                    line_output.write_result(format!("{:?} result: {:?}", process_type, result));
+                let output = Output::new();
+                if result == HashFileProcessResult::Canceled {
+                    output.clear_line();
+                } else {
+                    output.write_result(format!("{:?} result: {:?}", process_type, result));
                 }
             }
         }

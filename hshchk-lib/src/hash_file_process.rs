@@ -144,27 +144,31 @@ impl HashFileProcessor {
             complete_event: None,
         }
     }
-    pub fn handle_error(&mut self, file_path: &Path, error_state: FileProcessState) {
-        self.error_occurred = true;
-        self.files_processed = true;
-        if let Some(sender) = &self.error_event {
-            sender
-                .send(FileProcessEntry {
-                    file_path: file_path.to_path_buf(),
-                    state: error_state,
-                })
-                .unwrap();
-        }
+    pub fn set_progress_event_sender(&mut self, sender: Sender<FileProgress>) {
+        self.set_progress_event_sender_with_bytes_processed_notification_block_size(
+            sender,
+            DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
+        )
     }
-    pub fn handle_warning(&mut self, file_path: &Path, warning_state: FileProcessState) {
-        if let Some(sender) = &self.warning_event {
-            sender
-                .send(FileProcessEntry {
-                    file_path: file_path.to_path_buf(),
-                    state: warning_state,
-                })
-                .unwrap();
-        }
+    pub fn set_progress_event_sender_with_bytes_processed_notification_block_size(
+        &mut self,
+        sender: Sender<FileProgress>,
+        bytes_processed_notification_block_size: usize,
+    ) {
+        self.progress_event = Some(sender);
+        self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
+    }
+    pub fn set_warning_event_sender(&mut self, sender: Sender<FileProcessEntry>) {
+        self.warning_event = Some(sender);
+    }
+    pub fn set_error_event_sender(&mut self, sender: Sender<FileProcessEntry>) {
+        self.error_event = Some(sender);
+    }
+    pub fn set_complete_event_sender(&mut self, sender: Sender<HashFileProcessResult>) {
+        self.complete_event = Some(sender);
+    }
+    pub fn get_process_type(&self) -> HashFileProcessType {
+        self.process_type
     }
     pub fn process(&mut self) -> HashFileProcessResult {
         let cts = CancellationTokenSource::new();
@@ -182,7 +186,29 @@ impl HashFileProcessor {
 
         result
     }
-    pub fn process_internal(
+    fn handle_error(&mut self, file_path: &Path, error_state: FileProcessState) {
+        self.error_occurred = true;
+        self.files_processed = true;
+        if let Some(sender) = &self.error_event {
+            sender
+                .send(FileProcessEntry {
+                    file_path: file_path.to_path_buf(),
+                    state: error_state,
+                })
+                .unwrap();
+        }
+    }
+    fn handle_warning(&mut self, file_path: &Path, warning_state: FileProcessState) {
+        if let Some(sender) = &self.warning_event {
+            sender
+                .send(FileProcessEntry {
+                    file_path: file_path.to_path_buf(),
+                    state: warning_state,
+                })
+                .unwrap();
+        }
+    }
+    fn process_internal(
         &mut self,
         cancellation_token: Arc<CancellationToken>,
     ) -> HashFileProcessResult {
@@ -290,32 +316,6 @@ impl HashFileProcessor {
         } else {
             HashFileProcessResult::NoFilesProcessed
         }
-    }
-    pub fn set_progress_event_sender(&mut self, sender: Sender<FileProgress>) {
-        self.set_progress_event_sender_with_bytes_processed_notification_block_size(
-            sender,
-            DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
-        )
-    }
-    pub fn set_progress_event_sender_with_bytes_processed_notification_block_size(
-        &mut self,
-        sender: Sender<FileProgress>,
-        bytes_processed_notification_block_size: usize,
-    ) {
-        self.progress_event = Some(sender);
-        self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
-    }
-    pub fn set_warning_event_sender(&mut self, sender: Sender<FileProcessEntry>) {
-        self.warning_event = Some(sender);
-    }
-    pub fn set_error_event_sender(&mut self, sender: Sender<FileProcessEntry>) {
-        self.error_event = Some(sender);
-    }
-    pub fn set_complete_event_sender(&mut self, sender: Sender<HashFileProcessResult>) {
-        self.complete_event = Some(sender);
-    }
-    pub fn get_process_type(&self) -> HashFileProcessType {
-        self.process_type
     }
 }
 
