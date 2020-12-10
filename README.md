@@ -11,7 +11,7 @@
 Download the latest `.deb` package from the [release page](https://github.com/macote/hshchk/releases) and install it via:
 
 ``` bash
-sudo dpkg -i hshchk-1.0.0-x86_64-unknown-linux-gnu.deb  # adapt version number and architecture
+sudo dpkg -i hshchk-0.1.0-x86_64-unknown-linux-gnu.deb  # adapt version number and architecture
 ```
 
 ## Other
