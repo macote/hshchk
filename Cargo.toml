@@ -7,7 +7,7 @@ version = "0.1.0"
 repository = "https://github.com/macote/hshchk"
 readme = "README.md"
 license = "MIT"
-keywords = ["cli", "checksum", "hash", "file", "folder", "tree", "recursive", "sum", "md5", "sha", "blake"]
+keywords = ["checksum", "hash", "file", "tree", "recursive"]
 edition = "2018"
 
 [[bin]]
