@@ -4,8 +4,7 @@ use std::iter::repeat;
 use std::time::Instant;
 use unicode_segmentation::UnicodeSegmentation;
 
-use hshchk_lib::hash_file_process::{FileProcessEntry, FileProgress};
-
+use crate::hash_file_process::{FileProcessEntry, FileProgress};
 use crate::speed::get_speed;
 use crate::tty::terminal_size;
 

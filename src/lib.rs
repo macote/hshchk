@@ -13,6 +13,10 @@ mod file_hash;
 mod file_tree;
 mod hash_file;
 pub mod hash_file_process;
+mod output;
+mod speed;
+mod tty;
+pub mod ui;
 
 #[derive(Clone, Copy, Debug, EnumIter, EnumString, IntoStaticStr, PartialEq)]
 pub enum HashType {
@@ -109,7 +113,7 @@ fn get_file_hasher<'a>(hash_type: HashType, file_path: &'a Path) -> Box<dyn Bloc
 }
 
 #[cfg(test)]
-mod test;
+extern crate test_shared;
 
 #[cfg(test)]
 mod tests {
@@ -127,7 +131,7 @@ mod tests {
     // file hash
     #[test]
     fn file_hash_bytes_processed_event_sender_undefined() {
-        let file = test::create_tmp_file("");
+        let file = test_shared::create_tmp_file("");
         let file_hash: FileHash<Md5> = FileHash::new(&file);
         assert_eq!(file_hash.is_bytes_processed_event_sender_defined(), false);
         drop(file_hash); // force release of file handle (Windows)
@@ -136,7 +140,7 @@ mod tests {
 
     #[test]
     fn file_hash_bytes_processed_event_sender_defined() {
-        let file = test::create_tmp_file("");
+        let file = test_shared::create_tmp_file("");
         let mut file_hash: FileHash<Md5> = FileHash::new(&file);
         let (sender, _) = unbounded();
         file_hash.set_bytes_processed_event_sender(sender);
@@ -147,7 +151,7 @@ mod tests {
 
     #[test]
     fn file_hash_empty_file() {
-        let file = test::create_tmp_file("");
+        let file = test_shared::create_tmp_file("");
         let mut file_hash = get_md5_file_hasher(&file);
         let cancellation_token_source = CancellationTokenSource::new();
         let cancellation_token = cancellation_token_source.token();
@@ -160,7 +164,7 @@ mod tests {
 
     #[test]
     fn file_hash_data_file() {
-        let file = test::create_tmp_file("data");
+        let file = test_shared::create_tmp_file("data");
         let mut file_hash = get_md5_file_hasher(&file);
         let cancellation_token_source = CancellationTokenSource::new();
         let cancellation_token = cancellation_token_source.token();
@@ -173,7 +177,7 @@ mod tests {
 
     #[test]
     fn file_hash_data_two_blocks() {
-        let file = test::create_tmp_file("datadata");
+        let file = test_shared::create_tmp_file("datadata");
         let mut file_hash: FileHash<Md5> = FileHash::new_with_buffer_size(&file, 2);
         let (sender, receiver) = unbounded();
         file_hash.set_bytes_processed_event_sender_with_bytes_processed_notification_block_size(
@@ -195,7 +199,7 @@ mod tests {
 
     #[test]
     fn hash_file_load_single() {
-        let file = test::create_tmp_file("filename|0|hash");
+        let file = test_shared::create_tmp_file("filename|0|hash");
         let mut hash_file = HashFile::new();
         hash_file.load(&file);
         assert_eq!(1, hash_file.get_file_paths().len());
@@ -207,7 +211,7 @@ mod tests {
 
     #[test]
     fn hash_file_load_multiple() {
-        let file = test::create_tmp_file("filename1|1|hash1\r\nfilename2|2|hash2");
+        let file = test_shared::create_tmp_file("filename1|1|hash1\r\nfilename2|2|hash2");
         let mut hash_file = HashFile::new();
         hash_file.load(&file);
         assert_eq!(2, hash_file.get_file_paths().len());
@@ -222,7 +226,7 @@ mod tests {
 
     #[test]
     fn hash_file_load_failed_size() {
-        let file = test::create_tmp_file("filename|size|hash");
+        let file = test_shared::create_tmp_file("filename|size|hash");
         let file_clone = file.clone();
         let mut hash_file = HashFile::new();
         assert_eq!(
@@ -240,7 +244,7 @@ mod tests {
 
     #[test]
     fn hash_file_load_failed_filename() {
-        let file = test::create_tmp_file(&("a".repeat(4096) + "|0|hash"));
+        let file = test_shared::create_tmp_file(&("a".repeat(4096) + "|0|hash"));
         let file_clone = file.clone();
         let mut hash_file = HashFile::new();
         assert_eq!(
@@ -258,7 +262,7 @@ mod tests {
 
     #[test]
     fn hash_file_load_failed_hash() {
-        let file = test::create_tmp_file(&(String::from("filename|0|") + &"a".repeat(1025)));
+        let file = test_shared::create_tmp_file(&(String::from("filename|0|") + &"a".repeat(1025)));
         let file_clone = file.clone();
         let mut hash_file = HashFile::new();
         assert_eq!(

@@ -1,11 +1,12 @@
 use cancellation::CancellationTokenSource;
 use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
-use hshchk::ui;
-use hshchk_lib::hash_file_process::{
-    HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
-};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
+
+use crate::hash_file_process::{
+    HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
+};
+use crate::ui;
 
 fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     let app = App::new(crate_name!())
@@ -27,7 +28,7 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
                 .long("type")
                 .takes_value(true)
                 .value_name("type")
-                .possible_values(&hshchk_lib::get_hash_types())
+                .possible_values(&get_hash_types())
                 .case_insensitive(true)
                 .help("Hash function type"),
         )
@@ -89,8 +90,8 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         )));
     }
 
-    let hash_file_format = hshchk_lib::get_hash_file_format_from_arg(matches.is_present("sum"));
-    let hash_type = hshchk_lib::get_hash_type_from_str(
+    let hash_file_format = get_hash_file_format_from_arg(matches.is_present("sum"));
+    let hash_type = get_hash_type_from_str(
         &matches.value_of("type").unwrap_or("SHA1").to_uppercase(),
     );
 

@@ -1,0 +1,9 @@
+[package]
+name = "test_shared"
+version = "0.1.0"
+authors = ["MAC"]
+edition = "2018"
+
+[dependencies]
+nanoid = "0.2"
+

@@ -1,10 +1,10 @@
 use cancellation::CancellationToken;
 use crossbeam::channel::{select, unbounded};
-use hshchk_lib::hash_file_process::{
-    FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
-};
 use std::sync::Arc;
 
+use crate::hash_file_process::{
+    FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
+};
 use crate::output::Output;
 
 pub struct UI {

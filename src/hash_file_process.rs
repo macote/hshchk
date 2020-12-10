@@ -266,7 +266,7 @@ impl HashFileProcessor {
             panic!("Couldn't traverse {}: {}.", path.display(), why);
         }
 
-        if let Some(progress_sender) = &self.internal_progress_sender.take() {
+        if let Some(progress_sender) = self.internal_progress_sender.take() {
             drop(progress_sender);
         }
 
