@@ -3,10 +3,10 @@ use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 
-use crate::hash_file_process::{
+use hshchk::hash_file_process::{
     HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
 };
-use crate::ui;
+use hshchk::ui;
 
 fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     let app = App::new(crate_name!())
@@ -28,7 +28,7 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
                 .long("type")
                 .takes_value(true)
                 .value_name("type")
-                .possible_values(&get_hash_types())
+                .possible_values(&hshchk::get_hash_types())
                 .case_insensitive(true)
                 .help("Hash function type"),
         )
@@ -90,8 +90,8 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         )));
     }
 
-    let hash_file_format = get_hash_file_format_from_arg(matches.is_present("sum"));
-    let hash_type = get_hash_type_from_str(
+    let hash_file_format = hshchk::get_hash_file_format_from_arg(matches.is_present("sum"));
+    let hash_type = hshchk::get_hash_type_from_str(
         &matches.value_of("type").unwrap_or("SHA1").to_uppercase(),
     );
 
