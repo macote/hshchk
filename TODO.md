@@ -1,21 +1,18 @@
 # To do
 
 ## 1
-- check progress
-  - single line progress by default
-
-## 2
-- tree progress
-  - overall when verifying
-- report/stats
+- overall progress
+  - file and byte count when creating
+  - completion info when verifying
+- stats
   - how many files, total bytes, avg speed, etc.
 
-## 3
+## 2
 - features
   - report mode (output to file or no ui progress)
   - update checksum file
 
-## 4
+## 3
 - features
   - specify hash file
 - error handling

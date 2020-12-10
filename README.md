@@ -6,11 +6,12 @@
 
 # Installation
 
-## dpkg (Ubuntu 64-bit)
+## dpkg
+
+Download the latest `.deb` package from the [release page](https://github.com/macote/hshchk/releases) and install it via:
 
 ``` bash
-wget "https://github.com/macote/hshchk/releases/download/1.0.0/hshchk-1.0.0-x86_64-unknown-linux-gnu.deb"
-sudo dpkg -i hshchk-1.0.0-x86_64-unknown-linux-gnu.deb
+sudo dpkg -i hshchk-1.0.0-x86_64-unknown-linux-gnu.deb  # adapt version number and architecture
 ```
 
 ## Other

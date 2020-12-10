@@ -116,7 +116,8 @@ impl Output {
         }
     }
     pub fn write_init(&mut self) {
-        print!(" Checking...\r");
+        print!(" Opening files...\r");
+        stdout().flush().unwrap();
         self.last_output_instant = Some(Instant::now());
     }
     pub fn write_error(&mut self, file_process_entry: &FileProcessEntry) {
