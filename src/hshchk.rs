@@ -3,9 +3,7 @@ use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 
-use hshchk::hash_file_process::{
-    HashFileProcessOptions, HashFileProcessResult, HashFileProcessor,
-};
+use hshchk::hash_file_process::{HashFileProcessOptions, HashFileProcessResult, HashFileProcessor};
 use hshchk::ui;
 
 fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
@@ -91,9 +89,8 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     }
 
     let hash_file_format = hshchk::get_hash_file_format_from_arg(matches.is_present("sum"));
-    let hash_type = hshchk::get_hash_type_from_str(
-        &matches.value_of("type").unwrap_or("SHA1").to_uppercase(),
-    );
+    let hash_type =
+        hshchk::get_hash_type_from_str(&matches.value_of("type").unwrap_or("SHA1").to_uppercase());
 
     let cancellation_token_source = CancellationTokenSource::new();
     let main_cancellation_token = cancellation_token_source.token();
