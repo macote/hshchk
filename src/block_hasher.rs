@@ -1,6 +1,5 @@
-use cancellation::CancellationToken;
+use tokio_util::sync::CancellationToken;
 use crossbeam::channel::Sender;
-use std::sync::Arc;
 
 pub struct HashProgress {
     pub bytes_processed: u64,
@@ -19,14 +18,14 @@ pub trait BlockHasher {
     fn bytes_processed_notification_block_size(&self) -> u64;
     fn is_bytes_processed_event_sender_defined(&self) -> bool;
     fn handle_bytes_processed_event(&self, args: HashProgress);
-    fn compute(&mut self, cancellation_token: Arc<CancellationToken>) {
+    fn compute(&mut self, cancellation_token: CancellationToken) {
         let mut bytes_read;
         let mut running_notification_block_size = 0u64;
         let mut bytes_processed = 0u64;
         let bytes_processed_notification_block_size =
             self.bytes_processed_notification_block_size();
         loop {
-            if cancellation_token.is_canceled() {
+            if cancellation_token.is_cancelled() {
                 break;
             }
 

@@ -1,8 +1,7 @@
-use cancellation::CancellationToken;
+use tokio_util::sync::CancellationToken;
 use std::fs;
 use std::io::Result;
 use std::path::Path;
-use std::sync::Arc;
 
 pub trait FileTreeProcessor {
     fn process_file(&mut self, file_path: &Path);
@@ -19,11 +18,11 @@ impl<'a, T: FileTreeProcessor> FileTree<'a, T> {
     pub fn traverse(
         &mut self,
         path: &Path,
-        cancellation_token: &Arc<CancellationToken>,
+        cancellation_token: &CancellationToken,
     ) -> Result<()> {
         if path.is_dir() {
             for entry in fs::read_dir(path)? {
-                if cancellation_token.is_canceled() {
+                if cancellation_token.is_cancelled() {
                     break;
                 }
 

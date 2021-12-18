@@ -119,7 +119,7 @@ extern crate test_shared;
 mod tests {
     use super::*;
     use crate::hash_file::HashFile;
-    use cancellation::CancellationTokenSource;
+    use tokio_util::sync::CancellationToken;
     use crossbeam::channel::unbounded;
     use hash_file::HashFileEntry;
     use std::fs;
@@ -153,8 +153,7 @@ mod tests {
     fn file_hash_empty_file() {
         let file = test_shared::create_tmp_file("");
         let mut file_hash = get_md5_file_hasher(&file);
-        let cancellation_token_source = CancellationTokenSource::new();
-        let cancellation_token = cancellation_token_source.token();
+        let cancellation_token = CancellationToken::new();
         file_hash.compute(cancellation_token.clone());
         let digest = file_hash.digest();
         assert_eq!(digest, "d41d8cd98f00b204e9800998ecf8427e");
@@ -166,8 +165,7 @@ mod tests {
     fn file_hash_data_file() {
         let file = test_shared::create_tmp_file("data");
         let mut file_hash = get_md5_file_hasher(&file);
-        let cancellation_token_source = CancellationTokenSource::new();
-        let cancellation_token = cancellation_token_source.token();
+        let cancellation_token = CancellationToken::new();
         file_hash.compute(cancellation_token.clone());
         let digest = file_hash.digest();
         assert_eq!(digest, "8d777f385d3dfec8815d20f7496026dc");
@@ -183,9 +181,8 @@ mod tests {
         file_hash.set_bytes_processed_event_sender_with_bytes_processed_notification_block_size(
             sender, 4,
         );
-        let cancellation_token_source = CancellationTokenSource::new();
-        let cancellation_token = cancellation_token_source.token();
-        file_hash.compute(cancellation_token.clone());
+        let cancellation_token = CancellationToken::new();
+        file_hash.compute(cancellation_token);
         let digest = file_hash.digest();
         assert_eq!(digest, "511ae0b1c13f95e5f08f1a0dd3da3d93");
         assert_eq!(4, receiver.recv().unwrap().bytes_processed);

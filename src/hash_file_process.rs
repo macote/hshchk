@@ -2,13 +2,12 @@ use crate::block_hasher::HashProgress;
 use crate::file_tree::{FileTree, FileTreeProcessor};
 use crate::hash_file::{HashFile, HashFileEntry};
 use crate::{HashFileFormat, HashType};
-use cancellation::{CancellationToken, CancellationTokenSource};
+use tokio_util::sync::CancellationToken;
 use crossbeam::channel::{select, unbounded, Sender};
 use regex::Regex;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use strum::IntoEnumIterator;
 
 static HASHCHECK_BASE_FILE_NAME: &str = "hshchk";
@@ -79,7 +78,7 @@ pub struct HashFileProcessor {
     error_occurred: bool,
     files_processed: bool,
     bytes_processed_notification_block_size: usize,
-    cancellation_token: Option<Arc<CancellationToken>>,
+    cancellation_token: Option<CancellationToken>,
     internal_hash_progress_sender: Option<Sender<HashProgress>>,
     internal_progress_sender: Option<Sender<FileProgress>>,
     progress_event: Option<Sender<FileProgress>>,
@@ -171,13 +170,12 @@ impl HashFileProcessor {
         self.process_type
     }
     pub fn process(&mut self) -> HashFileProcessResult {
-        let cts = CancellationTokenSource::new();
-        let cancellation_token = cts.token();
-        self.process_with_cancellation_token(cancellation_token.clone())
+        let cancellation_token = CancellationToken::new();
+        self.process_with_cancellation_token(cancellation_token)
     }
     pub fn process_with_cancellation_token(
         &mut self,
-        cancellation_token: Arc<CancellationToken>,
+        cancellation_token: CancellationToken,
     ) -> HashFileProcessResult {
         let result = self.process_internal(cancellation_token);
         if let Some(sender) = &self.complete_event {
@@ -210,7 +208,7 @@ impl HashFileProcessor {
     }
     fn process_internal(
         &mut self,
-        cancellation_token: Arc<CancellationToken>,
+        cancellation_token: CancellationToken,
     ) -> HashFileProcessResult {
         self.cancellation_token = Some(cancellation_token.clone());
 
@@ -274,7 +272,7 @@ impl HashFileProcessor {
             thread_handle.join().unwrap();
         }
 
-        if cancellation_token.is_canceled() {
+        if cancellation_token.is_cancelled() {
             return HashFileProcessResult::Canceled;
         }
 
@@ -407,7 +405,7 @@ impl FileTreeProcessor for HashFileProcessor {
                     .unwrap();
             }
 
-            if cancellation_token.is_canceled() {
+            if cancellation_token.is_cancelled() {
                 return;
             }
         }

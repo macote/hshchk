@@ -1,7 +1,7 @@
-use cancellation::CancellationTokenSource;
 use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
+use tokio_util::sync::CancellationToken;
 
 use hshchk::hash_file_process::{HashFileProcessOptions, HashFileProcessResult, HashFileProcessor};
 use hshchk::ui;
@@ -92,12 +92,11 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     let hash_type =
         hshchk::get_hash_type_from_str(&matches.value_of("type").unwrap_or("SHA1").to_uppercase());
 
-    let cancellation_token_source = CancellationTokenSource::new();
-    let main_cancellation_token = cancellation_token_source.token();
+    let main_cancellation_token = CancellationToken::new();
     let cancellation_token = main_cancellation_token.clone();
 
     ctrlc::set_handler(move || {
-        cancellation_token_source.cancel();
+        cancellation_token.cancel();
     })
     .expect("Failed to set Ctrl-C handler.");
 
@@ -115,7 +114,7 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     let process_type = processor.get_process_type();
     let ui = ui::UI::new(processor, matches.is_present("silent"));
 
-    match ui.run(cancellation_token, process_type) {
+    match ui.run(main_cancellation_token, process_type) {
         HashFileProcessResult::Error => Err(Box::new(Error::new(
             ErrorKind::Other,
             "The hash check process failed.",
