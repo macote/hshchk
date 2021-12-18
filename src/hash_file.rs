@@ -50,7 +50,7 @@ impl HashFile {
     }
 
     pub fn save(&self, file_path: &Path, hash_file_format: HashFileFormat) {
-        let file = create_file(&file_path);
+        let file = create_file(file_path);
         let mut writer = BufWriter::new(&file);
         let entry_format = match hash_file_format {
             HashFileFormat::HashCheck => format_hash_check_entry,

@@ -1,5 +1,5 @@
-use tokio_util::sync::CancellationToken;
 use crossbeam::channel::Sender;
+use tokio_util::sync::CancellationToken;
 
 pub struct HashProgress {
     pub bytes_processed: u64,

@@ -1,5 +1,5 @@
-use tokio_util::sync::CancellationToken;
 use crossbeam::channel::{select, unbounded};
+use tokio_util::sync::CancellationToken;
 
 use crate::hash_file_process::{
     FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
@@ -53,7 +53,7 @@ impl UI {
                     recv(progress_receiver) -> msg => {
                         if let Ok(args) = msg {
                             if args.bytes_processed == 0 {
-                                if file_progress.file_path != "" && !skip_processed {
+                                if !file_progress.file_path.is_empty() && !skip_processed {
                                     output.write_processed(&file_progress.file_path);
                                 }
 

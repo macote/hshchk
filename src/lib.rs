@@ -119,10 +119,10 @@ extern crate test_shared;
 mod tests {
     use super::*;
     use crate::hash_file::HashFile;
-    use tokio_util::sync::CancellationToken;
     use crossbeam::channel::unbounded;
     use hash_file::HashFileEntry;
     use std::fs;
+    use tokio_util::sync::CancellationToken;
 
     // block hasher
 

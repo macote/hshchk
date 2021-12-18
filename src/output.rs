@@ -59,26 +59,26 @@ impl Output {
             let mut info_output = String::new();
             if error {
                 info_output = format!(" => {}", info);
-            } else if self.last_output_file_progress.file_path == file_path {
-                if bytes_processed != self.last_output_file_progress.bytes_processed {
-                    let percent = match file_size {
-                        0 => 100,
-                        _ => bytes_processed * 100 / file_size,
-                    };
-                    let speed = get_speed(
-                        bytes_processed,
-                        self.last_output_file_progress.bytes_processed,
-                        ellapsed_millis,
-                    );
+            } else if self.last_output_file_progress.file_path == file_path
+                && bytes_processed != self.last_output_file_progress.bytes_processed
+            {
+                let percent = match file_size {
+                    0 => 100,
+                    _ => bytes_processed * 100 / file_size,
+                };
+                let speed = get_speed(
+                    bytes_processed,
+                    self.last_output_file_progress.bytes_processed,
+                    ellapsed_millis,
+                );
 
-                    info_output = format!(
-                        " ({}; {} %; {} {})",
-                        file_size.to_formatted_string(&Locale::en),
-                        percent.to_formatted_string(&Locale::en),
-                        speed.bytes_per_interval.to_formatted_string(&Locale::en),
-                        speed.unit
-                    );
-                }
+                info_output = format!(
+                    " ({}; {} %; {} {})",
+                    file_size.to_formatted_string(&Locale::en),
+                    percent.to_formatted_string(&Locale::en),
+                    speed.bytes_per_interval.to_formatted_string(&Locale::en),
+                    speed.unit
+                );
             }
 
             let printed_file_path: String;

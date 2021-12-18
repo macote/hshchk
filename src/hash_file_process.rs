@@ -2,13 +2,13 @@ use crate::block_hasher::HashProgress;
 use crate::file_tree::{FileTree, FileTreeProcessor};
 use crate::hash_file::{HashFile, HashFileEntry};
 use crate::{HashFileFormat, HashType};
-use tokio_util::sync::CancellationToken;
 use crossbeam::channel::{select, unbounded, Sender};
 use regex::Regex;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
+use tokio_util::sync::CancellationToken;
 
 static HASHCHECK_BASE_FILE_NAME: &str = "hshchk";
 static HASHSUM_SUFFIX: &str = "SUMS";
@@ -206,10 +206,7 @@ impl HashFileProcessor {
                 .unwrap();
         }
     }
-    fn process_internal(
-        &mut self,
-        cancellation_token: CancellationToken,
-    ) -> HashFileProcessResult {
+    fn process_internal(&mut self, cancellation_token: CancellationToken) -> HashFileProcessResult {
         self.cancellation_token = Some(cancellation_token.clone());
 
         if self.process_type == HashFileProcessType::Verify {

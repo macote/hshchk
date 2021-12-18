@@ -20,7 +20,7 @@ const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: u64 = 2_097_152;
 impl<T: Digest> FileHash<T> {
     pub fn new_with_buffer_size(file_path: &Path, buffer_size: usize) -> Self {
         FileHash {
-            reader: BufReader::new(open_file(&file_path)),
+            reader: BufReader::new(open_file(file_path)),
             hasher: T::new(),
             buffer: Vec::with_capacity(buffer_size),
             buffer_size,
