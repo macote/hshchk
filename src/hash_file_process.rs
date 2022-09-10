@@ -342,9 +342,8 @@ impl FileTreeProcessor for HashFileProcessor {
 
         let relative_file_path = file_path.strip_prefix(&self.base_path).unwrap();
         let relative_file_path_str = relative_file_path.to_str().unwrap();
-        let file_size: u64;
-        match file_path.metadata() {
-            Ok(metadata) => file_size = metadata.len(),
+        let file_size = match file_path.metadata() {
+            Ok(metadata) => metadata.len(),
             Err(error) => {
                 self.handle_error(
                     relative_file_path,
@@ -352,7 +351,7 @@ impl FileTreeProcessor for HashFileProcessor {
                 );
                 return;
             }
-        }
+        };
 
         let hash_file_entry = self.hash_file.get_entry(relative_file_path_str);
         if let Some(file_entry) = hash_file_entry {

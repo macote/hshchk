@@ -1,6 +1,5 @@
 use num_format::{Locale, ToFormattedString};
 use std::io::{stdout, Write};
-use std::iter::repeat;
 use std::time::Instant;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -34,7 +33,7 @@ impl Output {
         let line_len = line.graphemes(true).count();
         if line_len < self.output_width {
             let gap = self.output_width - line_len;
-            let pad = &repeat(" ").take(gap).collect::<String>();
+            let pad = &" ".repeat(gap);
             padded_line = line + pad;
         }
 
@@ -81,20 +80,19 @@ impl Output {
                 );
             }
 
-            let printed_file_path: String;
             let file_path_max_size = self.output_width - info_output.len();
             let mut file_path_graphemes = file_path.graphemes(true);
             let file_path_len = file_path_graphemes.clone().count();
-            if file_path_max_size < file_path_len {
+            let printed_file_path = if file_path_max_size < file_path_len {
                 let offset = file_path_len - file_path_max_size + "..".len();
                 for _ in 0..offset {
                     file_path_graphemes.next();
                 }
 
-                printed_file_path = format!("{}{}", "..", file_path_graphemes.as_str());
+                format!("{}{}", "..", file_path_graphemes.as_str())
             } else {
-                printed_file_path = file_path.to_owned();
-            }
+                file_path.to_owned()
+            };
 
             let line_output = self.pad_line(format!("{}{}", printed_file_path, info_output));
             if error {

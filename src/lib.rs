@@ -100,7 +100,7 @@ fn get_blake3_file_hasher(file_path: &Path) -> FileHash<blake3::Hasher> {
     FileHash::new(file_path)
 }
 
-fn get_file_hasher<'a>(hash_type: HashType, file_path: &'a Path) -> Box<dyn BlockHasher + 'a> {
+fn get_file_hasher(hash_type: HashType, file_path: &Path) -> Box<dyn BlockHasher> {
     match hash_type {
         HashType::MD5 => Box::new(get_md5_file_hasher(file_path)),
         HashType::SHA1 => Box::new(get_sha1_file_hasher(file_path)),
