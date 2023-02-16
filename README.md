@@ -1,4 +1,3 @@
-[![Build status](https://github.com/macote/hshchk/workflows/ci/badge.svg)](https://github.com/macote/hshchk/actions)
 [![crates.io](https://img.shields.io/crates/v/hshchk.svg)](https://crates.io/crates/hshchk)
 
 # hshchk
