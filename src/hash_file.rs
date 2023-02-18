@@ -77,7 +77,7 @@ impl HashFile {
     }
 
     pub fn get_file_paths(&self) -> Vec<String> {
-        self.files.iter().map(|(key, _)| key.clone()).collect()
+        self.files.keys().cloned().collect()
     }
 
     pub fn is_empty(&self) -> bool {
