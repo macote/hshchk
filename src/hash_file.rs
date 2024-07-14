@@ -15,7 +15,6 @@ const MAX_HASH_SIZE: usize = 1024;
 pub struct HashFileEntry {
     pub file_path: String,
     pub size: Option<u64>,
-    pub binary: bool,
     pub digest: String,
 }
 
@@ -117,7 +116,6 @@ fn parse_hash_check_entry(line: &str) -> Option<HashFileEntry> {
         Some(HashFileEntry {
             file_path: parts[0].to_string(),
             size: Some(size),
-            binary: true,
             digest: parts[2].to_lowercase(),
         })
     } else {
@@ -130,7 +128,6 @@ fn parse_hash_sum_entry(line: &str) -> Option<HashFileEntry> {
         Some(space_position) => {
             let digest = &line[..space_position];
             let file_path = &line[space_position + 2..];
-            let binary = line.as_bytes()[space_position + 1] as char == '*';
             if file_path.len() > MAX_PATH_SIZE {
                 panic!(
                     "File path length must be less than {} characters.",
@@ -141,7 +138,6 @@ fn parse_hash_sum_entry(line: &str) -> Option<HashFileEntry> {
             Some(HashFileEntry {
                 file_path: file_path.to_string(),
                 size: None,
-                binary,
                 digest: digest.to_lowercase(),
             })
         }

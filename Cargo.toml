@@ -3,7 +3,7 @@ name = "hshchk"
 description = "A command-line file tree hash checker"
 authors = ["Marc-André Côté <mac@live.ca>"]
 categories = ["command-line-utilities"]
-version = "0.1.0"
+version = "0.2.0"
 repository = "https://github.com/macote/hshchk"
 readme = "README.md"
 license = "MIT"
@@ -15,28 +15,30 @@ name = "hshchk"
 path = "src/hshchk.rs"
 
 [dependencies]
-ansi_term = "0.12"
-atty = "0.2"
-blake2 = "0.9"
-blake3 = "0.3"
+blake2 = "0.10"
 crossbeam = "0.8"
-ctrlc = "3.1"
-digest = "0.9"
+ctrlc = "3.4"
+digest = "0.10"
 hex = "0.4"
-md-5 = "0.9"
+md-5 = "0.10"
 num-format = "0.4"
 regex = "1"
-sha-1 = "0.9"
-sha2 = "0.9"
-strum = "0.19"
-strum_macros = "0.19"
-tokio = "1.14.0"
-tokio-util = "0.6.9"
-unicode-segmentation = "1.6.0"
+sha-1 = "0.10"
+sha2 = "0.10"
+strum = "0.26"
+strum_macros = "0.26"
+terminal_size = "0.3"
+tokio = "1.38"
+tokio-util = "0.7"
+unicode-segmentation = "1.11"
 
 [dependencies.clap]
-version = "2"
-features = ["suggestions", "color", "wrap_help"]
+version = "4"
+features = ["cargo", "suggestions", "wrap_help"]
+
+[dependencies.blake3]
+version = "1.5"
+features = ["traits-preview"]
 
 [dev-dependencies]
 test_shared = { path = "test_shared" }

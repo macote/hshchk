@@ -47,7 +47,10 @@ impl UI {
                 ..Default::default()
             };
 
-            output.write_init();
+            if !silent {
+                output.write_init();
+            }
+
             while !senders_dropped {
                 select! {
                     recv(progress_receiver) -> msg => {

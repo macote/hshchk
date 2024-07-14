@@ -12,7 +12,7 @@ pub struct Speed {
 }
 
 pub fn get_speed(current_bytes: u64, previous_bytes: u64, elapsed_millis: u128) -> Speed {
-    if elapsed_millis == 0 {
+    if elapsed_millis == 0 || previous_bytes >= current_bytes {
         return Speed {
             bytes_per_interval: 0,
             unit: BPS,

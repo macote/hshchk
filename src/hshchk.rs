@@ -1,85 +1,80 @@
-use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg};
+use clap::{command, Arg};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 
 use hshchk::hash_file_process::{HashFileProcessOptions, HashFileProcessResult, HashFileProcessor};
-use hshchk::ui;
+use hshchk::{get_hash_types, ui};
 
 fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
-    let app = App::new(crate_name!())
-        .setting(AppSettings::ColorAuto)
-        .setting(AppSettings::ColoredHelp)
-        .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::UnifiedHelpMessage)
-        .version(crate_version!())
-        .about(crate_description!())
-        .arg(Arg::with_name("directory").required(true).help(
+    let matches = command!()
+        .arg(Arg::new("directory").required(true).help(
             "Target directory. \
-             Either create a checksum file or verify files in specified directory. \
-             The presence or absence of a checksum file in target directory dictates \
-             the operating mode.",
+         Either create a checksum file or verify files in specified directory. \
+         The presence or absence of a checksum file in target directory dictates \
+         the operating mode.",
         ))
         .arg(
-            Arg::with_name("type")
-                .short("t")
+            Arg::new("type")
+                .short('t')
                 .long("type")
-                .takes_value(true)
-                .value_name("type")
-                .possible_values(&hshchk::get_hash_types())
-                .case_insensitive(true)
-                .help("Hash function type"),
+                .value_parser(get_hash_types())
+                .ignore_case(true)
+                .default_value("SHA1")
+                .help("Hash type"),
         )
         .arg(
-            Arg::with_name("create")
-                .short("c")
+            Arg::new("create")
+                .short('c')
                 .long("create")
+                .action(clap::ArgAction::SetTrue)
                 .help("Force create mode and overwrite checksum file if it exists"),
         )
         .arg(
-            Arg::with_name("size")
-                .short("f")
+            Arg::new("size")
+                .short('f')
                 .long("size")
+                .action(clap::ArgAction::SetTrue)
                 .help("Check file size only"),
         )
         .arg(
-            Arg::with_name("extra")
-                .short("r")
+            Arg::new("extra")
+                .short('r')
                 .long("extra")
+                .action(clap::ArgAction::SetTrue)
                 .help("Report extra files"),
         )
         .arg(
-            Arg::with_name("silent")
-                .short("s")
+            Arg::new("silent")
+                .short('s')
                 .long("silent")
+                .action(clap::ArgAction::SetTrue)
                 .help("Don't output to stdout"),
         )
         .arg(
-            Arg::with_name("match")
-                .short("m")
+            Arg::new("match")
+                .short('m')
                 .long("match")
-                .takes_value(true)
                 .value_name("pattern")
-                .help("Process files that matches regex pattern"),
+                .help("Process files that match regex pattern"),
         )
         .arg(
-            Arg::with_name("ignore")
-                .short("i")
+            Arg::new("ignore")
+                .short('i')
                 .long("ignore")
-                .takes_value(true)
                 .value_name("pattern")
-                .help("Ignore files that matches regex pattern"),
+                .help("Ignore files that match regex pattern"),
         )
         .arg(
-            Arg::with_name("sum")
-                .short("u")
+            Arg::new("sum")
+                .short('u')
                 .long("sum")
+                .action(clap::ArgAction::SetTrue)
                 .help("Use hash sum (e.g. sha1sum) file format"),
-        );
+        )
+        .get_matches();
 
-    let matches = app.get_matches_safe()?;
-
-    let directory = matches.value_of("directory").unwrap();
+    let directory = matches.get_one::<String>("directory").unwrap();
     let target_path = PathBuf::from(&directory);
     if !target_path.is_dir() {
         return Err(Box::new(Error::new(
@@ -88,9 +83,13 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         )));
     }
 
-    let hash_file_format = hshchk::get_hash_file_format_from_arg(matches.is_present("sum"));
-    let hash_type =
-        hshchk::get_hash_type_from_str(&matches.value_of("type").unwrap_or("SHA1").to_uppercase());
+    let hash_file_format = hshchk::get_hash_file_format_from_arg(matches.get_flag("sum"));
+    let hash_type = hshchk::get_hash_type_from_str(
+        &matches
+            .get_one::<String>("type")
+            .unwrap()
+            .to_uppercase(),
+    );
 
     let main_cancellation_token = CancellationToken::new();
     let cancellation_token = main_cancellation_token.clone();
@@ -104,15 +103,15 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         base_path: target_path,
         hash_file_format: Some(hash_file_format),
         hash_type: Some(hash_type),
-        force_create: Some(matches.is_present("create")),
-        report_extra: Some(matches.is_present("extra")),
-        size_only: Some(matches.is_present("size")),
-        match_pattern: matches.value_of("match"),
-        ignore_pattern: matches.value_of("ignore"),
+        force_create: Some(matches.get_flag("create")),
+        report_extra: Some(matches.get_flag("extra")),
+        size_only: Some(matches.get_flag("size")),
+        match_pattern: matches.get_one::<String>("match").map(String::as_str),
+        ignore_pattern: matches.get_one::<String>("ignore").map(String::as_str),
     });
 
     let process_type = processor.get_process_type();
-    let ui = ui::UI::new(processor, matches.is_present("silent"));
+    let ui = ui::UI::new(processor, matches.get_flag("silent"));
 
     match ui.run(main_cancellation_token, process_type) {
         HashFileProcessResult::Error => Err(Box::new(Error::new(
@@ -132,16 +131,12 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
 }
 
 fn main() {
-    // Enable ANSI support for Windows
-    #[cfg(windows)]
-    let _ = ansi_term::enable_ansi_support();
-
     if let Err(error) = run() {
         if let Some(clap_error) = error.downcast_ref::<clap::Error>() {
             eprint!("{}", clap_error); // `clap` errors already have newlines
 
-            match clap_error.kind {
-                clap::ErrorKind::HelpDisplayed | clap::ErrorKind::VersionDisplayed => {
+            match clap_error.kind() {
+                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion => {
                     // The exit code should not indicate an error for --help / --version
                     std::process::exit(0)
                 }

@@ -1,11 +1,11 @@
 use num_format::{Locale, ToFormattedString};
 use std::io::{stdout, Write};
 use std::time::Instant;
+use terminal_size::terminal_size;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::hash_file_process::{FileProcessEntry, FileProgress};
 use crate::speed::get_speed;
-use crate::tty::terminal_size;
 
 const OUTPUT_REFRESH_IN_MILLIS: u32 = 233;
 
@@ -33,8 +33,8 @@ impl Output {
         let line_len = line.graphemes(true).count();
         if line_len < self.output_width {
             let gap = self.output_width - line_len;
-            let pad = &" ".repeat(gap);
-            padded_line = line + pad;
+            let pad = " ".repeat(gap);
+            padded_line = line + &pad;
         }
 
         padded_line

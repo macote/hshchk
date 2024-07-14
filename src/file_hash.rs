@@ -5,7 +5,7 @@ use digest::Digest;
 use std::io::{BufReader, Read};
 use std::path::Path;
 
-pub struct FileHash<T: Digest> {
+pub struct FileHash<T: Digest + digest::FixedOutputReset> {
     reader: BufReader<std::fs::File>,
     hasher: T,
     buffer: Vec<u8>,
@@ -17,7 +17,7 @@ pub struct FileHash<T: Digest> {
 const DEFAULT_BUFFER_SIZE: usize = 1_048_576;
 const DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE: u64 = 2_097_152;
 
-impl<T: Digest> FileHash<T> {
+impl<T: Digest + digest::FixedOutputReset> FileHash<T> {
     pub fn new_with_buffer_size(file_path: &Path, buffer_size: usize) -> Self {
         FileHash {
             reader: BufReader::new(open_file(file_path)),
@@ -33,14 +33,14 @@ impl<T: Digest> FileHash<T> {
     }
 }
 
-impl<T: Digest> BlockHasher for FileHash<T> {
+impl<T: Digest + digest::FixedOutputReset> BlockHasher for FileHash<T> {
     fn read(&mut self) -> usize {
         self.buffer.clear();
         let mut adaptor = (&mut self.reader).take(self.buffer_size as u64);
         adaptor.read_to_end(&mut self.buffer).unwrap()
     }
     fn update(&mut self, byte_count: usize) {
-        self.hasher.update(&self.buffer[..byte_count]);
+        Digest::update(&mut self.hasher, &self.buffer[..byte_count]);
     }
     fn digest(&mut self) -> String {
         hex::encode(self.hasher.finalize_reset())

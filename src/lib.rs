@@ -1,6 +1,6 @@
 use crate::block_hasher::BlockHasher;
 use crate::file_hash::FileHash;
-use blake2::{Blake2b, Blake2s};
+use blake2::{Blake2b512, Blake2s256};
 use md5::Md5;
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
@@ -15,18 +15,18 @@ mod hash_file;
 pub mod hash_file_process;
 mod output;
 mod speed;
-mod tty;
 pub mod ui;
 
 #[derive(Clone, Copy, Debug, EnumIter, EnumString, IntoStaticStr, PartialEq)]
+#[strum(ascii_case_insensitive)]
 pub enum HashType {
     MD5,
     SHA1,
     SHA256,
     SHA512,
-    BLAKE2B,
-    BLAKE2S,
-    BLAKE3,
+    Blake2b,
+    Blake2s,
+    Blake3,
 }
 
 #[derive(Clone, Copy, Debug, EnumIter, EnumString, IntoStaticStr, PartialEq)]
@@ -88,11 +88,11 @@ fn get_sha512_file_hasher(file_path: &Path) -> FileHash<Sha512> {
     FileHash::new(file_path)
 }
 
-fn get_blake2b_file_hasher(file_path: &Path) -> FileHash<Blake2b> {
+fn get_blake2b_file_hasher(file_path: &Path) -> FileHash<Blake2b512> {
     FileHash::new(file_path)
 }
 
-fn get_blake2s_file_hasher(file_path: &Path) -> FileHash<Blake2s> {
+fn get_blake2s_file_hasher(file_path: &Path) -> FileHash<Blake2s256> {
     FileHash::new(file_path)
 }
 
@@ -106,9 +106,9 @@ fn get_file_hasher(hash_type: HashType, file_path: &Path) -> Box<dyn BlockHasher
         HashType::SHA1 => Box::new(get_sha1_file_hasher(file_path)),
         HashType::SHA256 => Box::new(get_sha256_file_hasher(file_path)),
         HashType::SHA512 => Box::new(get_sha512_file_hasher(file_path)),
-        HashType::BLAKE2B => Box::new(get_blake2b_file_hasher(file_path)),
-        HashType::BLAKE2S => Box::new(get_blake2s_file_hasher(file_path)),
-        HashType::BLAKE3 => Box::new(get_blake3_file_hasher(file_path)),
+        HashType::Blake2b => Box::new(get_blake2b_file_hasher(file_path)),
+        HashType::Blake2s => Box::new(get_blake2s_file_hasher(file_path)),
+        HashType::Blake3 => Box::new(get_blake3_file_hasher(file_path)),
     }
 }
 
@@ -287,7 +287,6 @@ mod tests {
         hash_file.add_entry(HashFileEntry {
             file_path: "filename".into(),
             size: None,
-            binary: false,
             digest: "hash".into(),
         });
         assert!(!hash_file.is_empty());
@@ -299,13 +298,11 @@ mod tests {
         hash_file.add_entry(HashFileEntry {
             file_path: "filename1".into(),
             size: None,
-            binary: false,
             digest: "hash1".into(),
         });
         hash_file.add_entry(HashFileEntry {
             file_path: "filename2".into(),
             size: None,
-            binary: false,
             digest: "hash2".into(),
         });
         let mut filenames = hash_file.get_file_paths();
@@ -319,7 +316,6 @@ mod tests {
         hash_file.add_entry(HashFileEntry {
             file_path: "filename".into(),
             size: None,
-            binary: false,
             digest: "hash".into(),
         });
         hash_file.remove_entry("filename");

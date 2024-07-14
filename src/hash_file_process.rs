@@ -410,7 +410,6 @@ impl FileTreeProcessor for HashFileProcessor {
             self.hash_file.add_entry(HashFileEntry {
                 file_path: relative_file_path_str.to_string(),
                 size: Some(file_size),
-                binary: true,
                 digest,
             });
         } else if self.process_type == HashFileProcessType::Verify {
