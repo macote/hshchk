@@ -50,11 +50,11 @@ pub fn get_hash_type_from_str(type_str: &str) -> HashType {
     type_str.parse().unwrap()
 }
 
-pub fn get_hash_file_format_from_arg(sum_format_present: bool) -> HashFileFormat {
-    if sum_format_present {
-        HashFileFormat::HashSum
-    } else {
+pub fn get_hash_file_format_from_arg(hc_format_present: bool) -> HashFileFormat {
+    if hc_format_present {
         HashFileFormat::HashCheck
+    } else {
+        HashFileFormat::HashSum
     }
 }
 

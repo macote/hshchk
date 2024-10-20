@@ -66,11 +66,11 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
                 .help("Ignore files that match regex pattern"),
         )
         .arg(
-            Arg::new("sum")
+            Arg::new("hc")
                 .short('u')
-                .long("sum")
+                .long("hc")
                 .action(clap::ArgAction::SetTrue)
-                .help("Use hash sum (e.g. sha1sum) file format"),
+                .help("Use hshchk (e.g. hshchk.sha1) file format"),
         )
         .get_matches();
 
@@ -83,13 +83,9 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         )));
     }
 
-    let hash_file_format = hshchk::get_hash_file_format_from_arg(matches.get_flag("sum"));
-    let hash_type = hshchk::get_hash_type_from_str(
-        &matches
-            .get_one::<String>("type")
-            .unwrap()
-            .to_uppercase(),
-    );
+    let hash_file_format = hshchk::get_hash_file_format_from_arg(matches.get_flag("hc"));
+    let hash_type =
+        hshchk::get_hash_type_from_str(&matches.get_one::<String>("type").unwrap().to_uppercase());
 
     let main_cancellation_token = CancellationToken::new();
     let cancellation_token = main_cancellation_token.clone();

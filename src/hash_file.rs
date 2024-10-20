@@ -40,7 +40,7 @@ impl HashFile {
             _ => parse_hash_sum_entry,
         };
 
-        for (_, line) in reader.lines().enumerate() {
+        for line in reader.lines() {
             let content = line.unwrap().replace(file_separator, os_separator);
             if let Some(file_entry) = entry_parse(&content) {
                 self.add_entry(file_entry);
