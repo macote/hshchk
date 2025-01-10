@@ -59,16 +59,15 @@ impl<T: Digest + digest::FixedOutputReset> BlockHasher for FileHash<T> {
         self.bytes_processed_event = Some(sender);
         self.bytes_processed_notification_block_size = bytes_processed_notification_block_size;
     }
-    fn is_bytes_processed_event_sender_defined(&self) -> bool {
-        self.bytes_processed_event.is_some()
-    }
     fn bytes_processed_notification_block_size(&self) -> u64 {
         self.bytes_processed_notification_block_size
     }
+    fn is_bytes_processed_event_sender_defined(&self) -> bool {
+        self.bytes_processed_event.is_some()
+    }
     fn handle_bytes_processed_event(&self, args: HashProgress) {
-        match &self.bytes_processed_event {
-            Some(sender) => sender.send(args).unwrap(),
-            None => (),
+        if let Some(sender) = &self.bytes_processed_event {
+            sender.send(args).unwrap()
         }
     }
 }
