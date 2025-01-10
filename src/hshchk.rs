@@ -6,7 +6,7 @@ use tokio_util::sync::CancellationToken;
 use hshchk::hash_file_process::{HashFileProcessOptions, HashFileProcessResult, HashFileProcessor};
 use hshchk::{get_hash_types, ui};
 
-fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
+fn run() -> Result<(), Box<dyn ::std::error::Error>> {
     let matches = command!()
         .arg(Arg::new("directory").required(true).help(
             "Target directory. \
@@ -77,8 +77,7 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     let directory = matches.get_one::<String>("directory").unwrap();
     let target_path = PathBuf::from(&directory);
     if !target_path.is_dir() {
-        return Err(Box::new(Error::new(
-            ErrorKind::Other,
+        return Err(Box::new(Error::other(
             "The specified directory doesn't exist.",
         )));
     }
@@ -110,10 +109,9 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     let ui = ui::UI::new(processor, matches.get_flag("silent"));
 
     match ui.run(main_cancellation_token, process_type) {
-        HashFileProcessResult::Error => Err(Box::new(Error::new(
-            ErrorKind::Other,
-            "The hash check process failed.",
-        ))),
+        HashFileProcessResult::Error => {
+            Err(Box::new(Error::other("The hash check process failed.")))
+        }
         HashFileProcessResult::Canceled => Err(Box::new(Error::new(
             ErrorKind::Interrupted,
             "The hash check process was canceled.",

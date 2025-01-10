@@ -118,6 +118,8 @@ extern crate test_shared;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::block_hasher::Hasher;
+    use crate::block_hasher::ProgressReporter;
     use crate::hash_file::HashFile;
     use crossbeam::channel::unbounded;
     use hash_file::HashFileEntry;
@@ -133,7 +135,7 @@ mod tests {
     fn file_hash_bytes_processed_event_sender_undefined() {
         let file = test_shared::create_tmp_file("");
         let file_hash: FileHash<Md5> = FileHash::new(&file);
-        assert_eq!(file_hash.is_bytes_processed_event_sender_defined(), false);
+        assert!(!file_hash.is_bytes_processed_event_sender_defined());
         drop(file_hash); // force release of file handle (Windows)
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
@@ -144,7 +146,7 @@ mod tests {
         let mut file_hash: FileHash<Md5> = FileHash::new(&file);
         let (sender, _) = unbounded();
         file_hash.set_bytes_processed_event_sender(sender);
-        assert_eq!(file_hash.is_bytes_processed_event_sender_defined(), true);
+        assert!(file_hash.is_bytes_processed_event_sender_defined());
         drop(file_hash); // force release of file handle (Windows)
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
