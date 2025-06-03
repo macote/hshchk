@@ -4,7 +4,7 @@ use blake2::{Blake2b512, Blake2s256};
 use md5::Md5;
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
-use std::fs::File;
+use std::io;
 use std::path::{Path, MAIN_SEPARATOR};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
@@ -58,57 +58,43 @@ pub fn get_hash_file_format_from_arg(hc_format_present: bool) -> HashFileFormat 
     }
 }
 
-fn open_file(file_path: &Path) -> File {
-    match File::open(file_path) {
-        Err(why) => panic!("Couldn't open {}: {}.", file_path.display(), why),
-        Ok(file) => file,
-    }
-}
-
-fn create_file(file_path: &Path) -> File {
-    match File::create(file_path) {
-        Err(why) => panic!("Couldn't create {}: {}.", file_path.display(), why),
-        Ok(file) => file,
-    }
-}
-
-fn get_md5_file_hasher(file_path: &Path) -> FileHash<Md5> {
+fn get_md5_file_hasher(file_path: &Path) -> io::Result<FileHash<Md5>> {
     FileHash::new(file_path)
 }
 
-fn get_sha1_file_hasher(file_path: &Path) -> FileHash<Sha1> {
+fn get_sha1_file_hasher(file_path: &Path) -> io::Result<FileHash<Sha1>> {
     FileHash::new(file_path)
 }
 
-fn get_sha256_file_hasher(file_path: &Path) -> FileHash<Sha256> {
+fn get_sha256_file_hasher(file_path: &Path) -> io::Result<FileHash<Sha256>> {
     FileHash::new(file_path)
 }
 
-fn get_sha512_file_hasher(file_path: &Path) -> FileHash<Sha512> {
+fn get_sha512_file_hasher(file_path: &Path) -> io::Result<FileHash<Sha512>> {
     FileHash::new(file_path)
 }
 
-fn get_blake2b_file_hasher(file_path: &Path) -> FileHash<Blake2b512> {
+fn get_blake2b_file_hasher(file_path: &Path) -> io::Result<FileHash<Blake2b512>> {
     FileHash::new(file_path)
 }
 
-fn get_blake2s_file_hasher(file_path: &Path) -> FileHash<Blake2s256> {
+fn get_blake2s_file_hasher(file_path: &Path) -> io::Result<FileHash<Blake2s256>> {
     FileHash::new(file_path)
 }
 
-fn get_blake3_file_hasher(file_path: &Path) -> FileHash<blake3::Hasher> {
+fn get_blake3_file_hasher(file_path: &Path) -> io::Result<FileHash<blake3::Hasher>> {
     FileHash::new(file_path)
 }
 
-fn get_file_hasher(hash_type: HashType, file_path: &Path) -> Box<dyn BlockHasher> {
+fn get_file_hasher(hash_type: HashType, file_path: &Path) -> io::Result<Box<dyn BlockHasher>> {
     match hash_type {
-        HashType::MD5 => Box::new(get_md5_file_hasher(file_path)),
-        HashType::SHA1 => Box::new(get_sha1_file_hasher(file_path)),
-        HashType::SHA256 => Box::new(get_sha256_file_hasher(file_path)),
-        HashType::SHA512 => Box::new(get_sha512_file_hasher(file_path)),
-        HashType::Blake2b => Box::new(get_blake2b_file_hasher(file_path)),
-        HashType::Blake2s => Box::new(get_blake2s_file_hasher(file_path)),
-        HashType::Blake3 => Box::new(get_blake3_file_hasher(file_path)),
+        HashType::MD5 => Ok(Box::new(get_md5_file_hasher(file_path)?)),
+        HashType::SHA1 => Ok(Box::new(get_sha1_file_hasher(file_path)?)),
+        HashType::SHA256 => Ok(Box::new(get_sha256_file_hasher(file_path)?)),
+        HashType::SHA512 => Ok(Box::new(get_sha512_file_hasher(file_path)?)),
+        HashType::Blake2b => Ok(Box::new(get_blake2b_file_hasher(file_path)?)),
+        HashType::Blake2s => Ok(Box::new(get_blake2s_file_hasher(file_path)?)),
+        HashType::Blake3 => Ok(Box::new(get_blake3_file_hasher(file_path)?)),
     }
 }
 
@@ -119,9 +105,7 @@ extern crate test_shared;
 mod tests {
     use super::*;
     use crate::block_hasher::Hasher;
-    use crate::block_hasher::ProgressReporter;
     use crate::hash_file::HashFile;
-    use crossbeam::channel::unbounded;
     use hash_file::HashFileEntry;
     use std::fs;
     use tokio_util::sync::CancellationToken;
@@ -132,31 +116,11 @@ mod tests {
 
     // file hash
     #[test]
-    fn file_hash_bytes_processed_event_sender_undefined() {
-        let file = test_shared::create_tmp_file("");
-        let file_hash: FileHash<Md5> = FileHash::new(&file);
-        assert!(!file_hash.is_bytes_processed_event_sender_defined());
-        drop(file_hash); // force release of file handle (Windows)
-        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
-    }
-
-    #[test]
-    fn file_hash_bytes_processed_event_sender_defined() {
-        let file = test_shared::create_tmp_file("");
-        let mut file_hash: FileHash<Md5> = FileHash::new(&file);
-        let (sender, _) = unbounded();
-        file_hash.set_bytes_processed_event_sender(sender);
-        assert!(file_hash.is_bytes_processed_event_sender_defined());
-        drop(file_hash); // force release of file handle (Windows)
-        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
-    }
-
-    #[test]
     fn file_hash_empty_file() {
         let file = test_shared::create_tmp_file("");
-        let mut file_hash = get_md5_file_hasher(&file);
+        let mut file_hash = get_md5_file_hasher(&file).unwrap();
         let cancellation_token = CancellationToken::new();
-        file_hash.compute(cancellation_token.clone());
+        file_hash.compute(cancellation_token.clone()).unwrap();
         let digest = file_hash.digest();
         assert_eq!(digest, "d41d8cd98f00b204e9800998ecf8427e");
         drop(file_hash); // force release of file handle (Windows)
@@ -166,9 +130,9 @@ mod tests {
     #[test]
     fn file_hash_data_file() {
         let file = test_shared::create_tmp_file("data");
-        let mut file_hash = get_md5_file_hasher(&file);
+        let mut file_hash = get_md5_file_hasher(&file).unwrap();
         let cancellation_token = CancellationToken::new();
-        file_hash.compute(cancellation_token.clone());
+        file_hash.compute(cancellation_token.clone()).unwrap();
         let digest = file_hash.digest();
         assert_eq!(digest, "8d777f385d3dfec8815d20f7496026dc");
         drop(file_hash); // force release of file handle (Windows)
@@ -178,18 +142,15 @@ mod tests {
     #[test]
     fn file_hash_data_two_blocks() {
         let file = test_shared::create_tmp_file("datadata");
-        let mut file_hash: FileHash<Md5> = FileHash::new_with_buffer_size(&file, 2);
-        let (sender, receiver) = unbounded();
-        file_hash.set_bytes_processed_event_sender_with_bytes_processed_notification_block_size(
-            sender, 4,
-        );
+        let mut file_hash: FileHash<Md5> = FileHash::new_with_buffer_size(&file, 2).unwrap();
+        let mut progress = Vec::new();
         let cancellation_token = CancellationToken::new();
-        file_hash.compute(cancellation_token);
+        file_hash
+            .compute_with_progress(cancellation_token, &mut |bytes| progress.push(bytes))
+            .unwrap();
         let digest = file_hash.digest();
         assert_eq!(digest, "511ae0b1c13f95e5f08f1a0dd3da3d93");
-        assert_eq!(4, receiver.recv().unwrap().bytes_processed);
-        assert_eq!(8, receiver.recv().unwrap().bytes_processed);
-        assert!(receiver.try_recv().is_err());
+        assert_eq!(progress, vec![2, 4, 6, 8]);
         drop(file_hash); // force release of file handle (Windows)
         fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
     }
@@ -200,7 +161,7 @@ mod tests {
     fn hash_file_load_single() {
         let file = test_shared::create_tmp_file("filename|0|hash");
         let mut hash_file = HashFile::new();
-        hash_file.load(&file);
+        hash_file.load(&file).unwrap();
         assert_eq!(1, hash_file.get_file_paths().len());
         let entry = hash_file.get_entry("filename").unwrap();
         assert_eq!(0, entry.size.unwrap());
@@ -212,7 +173,7 @@ mod tests {
     fn hash_file_load_multiple() {
         let file = test_shared::create_tmp_file("filename1|1|hash1\r\nfilename2|2|hash2");
         let mut hash_file = HashFile::new();
-        hash_file.load(&file);
+        hash_file.load(&file).unwrap();
         assert_eq!(2, hash_file.get_file_paths().len());
         let entry = hash_file.get_entry("filename1").unwrap();
         assert_eq!(1, entry.size.unwrap());
@@ -224,57 +185,20 @@ mod tests {
     }
 
     #[test]
-    fn hash_file_load_failed_size() {
-        let file = test_shared::create_tmp_file("filename|size|hash");
-        let file_clone = file.clone();
-        let mut hash_file = HashFile::new();
-        assert_eq!(
-            std::panic::catch_unwind(move || {
-                hash_file.load(&file_clone);
-            })
-            .err()
-            .and_then(|a| a
-                .downcast_ref::<String>()
-                .map(|s| { &s[..25] == "Failed to parse file size" })),
-            Some(true)
-        );
-        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
-    }
-
-    #[test]
-    fn hash_file_load_failed_filename() {
-        let file = test_shared::create_tmp_file(&("a".repeat(4096) + "|0|hash"));
-        let file_clone = file.clone();
-        let mut hash_file = HashFile::new();
-        assert_eq!(
-            std::panic::catch_unwind(move || {
-                hash_file.load(&file_clone);
-            })
-            .err()
-            .and_then(|a| a
-                .downcast_ref::<String>()
-                .map(|s| { s == "File path length must be less than 4096 characters." })),
-            Some(true)
-        );
-        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
-    }
-
-    #[test]
-    fn hash_file_load_failed_hash() {
-        let file = test_shared::create_tmp_file(&(String::from("filename|0|") + &"a".repeat(1025)));
-        let file_clone = file.clone();
-        let mut hash_file = HashFile::new();
-        assert_eq!(
-            std::panic::catch_unwind(move || {
-                hash_file.load(&file_clone);
-            })
-            .err()
-            .and_then(|a| a
-                .downcast_ref::<String>()
-                .map(|s| { s == "Hash length must be less than 1025 characters." })),
-            Some(true)
-        );
-        fs::remove_dir_all(file.parent().unwrap()).expect("Failed to remove test directory.");
+    fn hash_file_rejects_malformed_entries() {
+        for content in [
+            "filename|size|hash".to_string(),
+            "a".repeat(4096) + "|0|hash",
+            "filename|0|".to_string() + &"a".repeat(1025),
+            "digest ".to_string(),
+            "../outside|0|hash".to_string(),
+        ] {
+            let file = test_shared::create_tmp_file(&content);
+            let mut hash_file = HashFile::new();
+            assert!(hash_file.load(&file).is_err());
+            assert!(hash_file.is_empty());
+            fs::remove_dir_all(file.parent().unwrap()).unwrap();
+        }
     }
 
     #[test]

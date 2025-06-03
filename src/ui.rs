@@ -1,129 +1,103 @@
-use crossbeam::channel::{select, unbounded};
-use tokio_util::sync::CancellationToken;
-
-use crate::hash_file_process::{
-    FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
-};
+use crate::hash_file_process::{HashFileProcessResult, HashFileProcessType, HashFileProcessor};
 use crate::output::Output;
+use crossbeam::channel::{never, select, unbounded};
+use std::path::PathBuf;
+use tokio_util::sync::CancellationToken;
 
 pub struct UI {
     processor: HashFileProcessor,
     silent: bool,
+    report_file: Option<PathBuf>,
+    progress: Option<bool>,
 }
 
 impl UI {
-    pub fn new(processor: HashFileProcessor, silent: bool) -> UI {
-        UI { processor, silent }
+    pub fn new(processor: HashFileProcessor, silent: bool) -> Self {
+        Self {
+            processor,
+            silent,
+            report_file: None,
+            progress: None,
+        }
     }
+    pub fn with_report_file(mut self, path: Option<PathBuf>) -> Self {
+        self.report_file = path;
+        self
+    }
+    pub fn with_progress(mut self, progress: Option<bool>) -> Self {
+        self.progress = progress;
+        self
+    }
+
     pub fn run(
         mut self,
-        cancellation_token: CancellationToken,
-        process_type: HashFileProcessType,
+        token: CancellationToken,
+        mode: HashFileProcessType,
     ) -> HashFileProcessResult {
-        let silent = self.silent;
-        let (error_sender, error_receiver) = unbounded();
-        let (warning_sender, warning_receiver) = unbounded();
-        let (progress_sender, progress_receiver) = unbounded();
-        let (complete_sender, complete_receiver) = unbounded();
-
-        self.processor.set_error_event_sender(error_sender.clone());
-        self.processor
-            .set_warning_event_sender(warning_sender.clone());
-        if !silent {
-            self.processor
-                .set_progress_event_sender(progress_sender.clone());
-            self.processor
-                .set_complete_event_sender(complete_sender.clone());
-        }
-
-        let message_loop = std::thread::spawn(move || {
-            let mut error_sender_dropped = false;
-            let mut warning_sender_dropped = false;
-            let mut progress_sender_dropped = silent;
-            let mut senders_dropped = false;
-            let mut skip_processed = false;
-            let mut output = Output::new();
-            let mut file_progress = FileProgress {
-                ..Default::default()
-            };
-
-            if !silent {
-                output.write_init();
+        // Validate before opening: the report must never append to the manifest.
+        if let Some(path) = &self.report_file {
+            if let Err(error) = self.processor.exclude_output_file(path) {
+                eprintln!("Cannot use report '{}': {}", path.display(), error);
+                return HashFileProcessResult::Error;
             }
-
-            while !senders_dropped {
+        }
+        let output = match Output::new(self.report_file.as_deref(), self.silent, self.progress) {
+            Ok(output) => output,
+            Err(error) => {
+                eprintln!("Cannot open report: {}", error);
+                return HashFileProcessResult::Error;
+            }
+        };
+        let (errors, mut error_receiver) = unbounded();
+        let (warnings, mut warning_receiver) = unbounded();
+        let (progress, mut progress_receiver) = unbounded();
+        self.processor.set_error_event_sender(errors);
+        self.processor.set_warning_event_sender(warnings);
+        if !self.silent || self.report_file.is_some() {
+            self.processor.set_progress_event_sender(progress.clone());
+        }
+        drop(progress);
+        let renderer = std::thread::spawn(move || -> std::io::Result<Output> {
+            let mut output = output;
+            let mut active = 3;
+            while active > 0 {
                 select! {
-                    recv(progress_receiver) -> msg => {
-                        if let Ok(args) = msg {
-                            if args.bytes_processed == 0 {
-                                if !file_progress.file_path.is_empty() && !skip_processed {
-                                    output.write_processed(&file_progress.file_path);
-                                }
-
-                                skip_processed = false;
-                                file_progress = FileProgress { ..args };
-                            }
-                            else {
-                                file_progress.bytes_processed = args.bytes_processed;
-                            }
-
-                            output.write_progress(&file_progress);
-                        }
-                        else {
-                            progress_sender_dropped = true;
-                        }
+                    recv(error_receiver) -> message => match message {
+                        Ok(entry) => output.write_diagnostic(&entry, false)?,
+                        Err(_) => { error_receiver = never(); active -= 1; }
                     },
-                    recv(error_receiver) -> msg => {
-                        if let Ok(error) = msg {
-                            skip_processed = true;
-                            output.write_error(&error);
-                        }
-                        else {
-                            error_sender_dropped = true;
-                        }
+                    recv(warning_receiver) -> message => match message {
+                        Ok(entry) => output.write_diagnostic(&entry, true)?,
+                        Err(_) => { warning_receiver = never(); active -= 1; }
                     },
-                    recv(warning_receiver) -> msg => {
-                        if let Ok(warning) = msg {
-                            skip_processed = true;
-                            output.write_error(&warning);
-                        } else {
-                            warning_sender_dropped = true;
-                        }
-                    }
+                    recv(progress_receiver) -> message => match message {
+                        Ok(progress) => output.write_progress(&progress)?,
+                        Err(_) => { progress_receiver = never(); active -= 1; }
+                    },
                 }
-
-                senders_dropped =
-                    progress_sender_dropped && error_sender_dropped && warning_sender_dropped;
             }
-
-            if !silent && !skip_processed {
-                output.write_processed(&file_progress.file_path);
-            }
+            Ok(output)
         });
-
-        let process = std::thread::spawn(move || {
-            let result = self
-                .processor
-                .process_with_cancellation_token(cancellation_token);
-            drop(error_sender);
-            drop(warning_sender);
-            drop(progress_sender);
-            result
-        });
-
-        message_loop.join().unwrap();
-        if !silent {
-            if let Ok(result) = complete_receiver.recv() {
-                let output = Output::new();
-                if result == HashFileProcessResult::Canceled {
-                    output.clear_line();
-                } else {
-                    output.write_result(format!("{:?} result: {:?}", process_type, result));
+        let result = self.processor.process_with_cancellation_token(token);
+        let stats = self.processor.stats().clone();
+        let dry_run = self.processor.is_dry_run();
+        drop(self.processor);
+        match renderer.join() {
+            Ok(Ok(mut output)) => {
+                if let Err(error) = output.write_result(mode, result, &stats, dry_run) {
+                    eprintln!("Cannot write output: {}", error);
+                    return HashFileProcessResult::Error;
                 }
+            }
+            Ok(Err(error)) => {
+                eprintln!("Cannot write output: {}", error);
+                return HashFileProcessResult::Error;
+            }
+            Err(_) => {
+                eprintln!("Output worker failed");
+                return HashFileProcessResult::Error;
             }
         }
-
-        drop(complete_sender);
-        process.join().unwrap()
+        result
     }
 }

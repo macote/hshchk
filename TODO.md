@@ -1,26 +1,35 @@
 # To do
 
-## 1
+## Completed in the rebased feature batch
+- update existing checksum files by rehashing selected files
+- preserve excluded entries; remove missing entries only on request
+- dry-run update counts without checksum changes
+- sorted, transactional manifest saves with unique temporary files
+- report files, terminal-aware progress, and plain redirected output
+- final counts, actual hashed bytes, inspected sizes, elapsed time, and throughput
+- errors for malformed manifests, invalid regexes, inaccessible files, and failed saves
+- regression tests for update, reporting, output, and failure preservation
+
+## 1 — CLI and result contract
+- explicit create, verify, and update subcommands; keep the directory shortcut
+- specify checksum file; reject ambiguous automatic discovery
+- structured operation outcome with diagnostics and statistics for library callers
+- machine-readable JSON output and documented exit-code categories
 - checksum format follow-up
-  - CLI already defaults to HashSum without file sizes; decide whether to align the library default
-  - extend filename detection beyond `<hashType>SUMS` to `<hashType>sum`, `<hashType>SUM` and `<hashType>sums`
+  - decide whether to align the library default with the CLI's HashSum default
+  - extend filename detection beyond `<hashType>SUMS`
 - overall progress
-  - file and byte count when creating
-  - completion info when verifying (items left, time left, etc.)
-  - stats (how many files, total bytes, avg speed, etc.)
+  - total file and byte counts while creating
+  - remaining items and time estimates while verifying
 
-## 2
-- performance
-  - use multiple CPU cores to calculate (one file per core)
-- features
-  - report mode (output to file or no ui progress)
-  - update checksum file
+## 2 — Filesystem and format compatibility
+- define complete symlink and non-Unicode filename policies
+- escaped filenames for checksum format interoperability
+- concurrent modification and concurrent manifest writer handling
+- preserve crash durability guarantees across supported filesystems
+- more fault-injection tests for cancellation during commit and output write failures
 
-## 3
-- features
-  - specify hash file
-- error handling
-  - inaccessible files and folders (lock, permission, etc.)
-  - terminal output when stdout is redirected or no terminal size is available
-  - malformed checksum entries and invalid regular expressions
-- additional tests
+## 3 — Performance and release polish
+- benchmark before adding bounded multicore hashing
+- shell completions and expanded help examples
+- decide algorithm defaults in a separately documented release

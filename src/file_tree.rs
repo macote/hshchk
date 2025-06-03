@@ -16,18 +16,24 @@ impl<'a, T: FileTreeProcessor> FileTree<'a, T> {
         FileTree { processor }
     }
     pub fn traverse(&mut self, path: &Path, cancellation_token: &CancellationToken) -> Result<()> {
-        if path.is_dir() {
-            for entry in fs::read_dir(path)? {
-                if cancellation_token.is_cancelled() {
-                    break;
-                }
+        for entry in fs::read_dir(path)? {
+            if cancellation_token.is_cancelled() {
+                break;
+            }
 
-                let path = entry?.path();
-                if path.is_dir() {
-                    self.traverse(&path, cancellation_token)?;
-                } else {
-                    self.processor.process_file(&path);
-                }
+            let entry = entry?;
+            let path = entry.path();
+            let file_type = entry.file_type()?;
+            if file_type.is_symlink() && path.is_dir() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    format!("directory symlinks are not followed: {}", path.display()),
+                ));
+            }
+            if file_type.is_dir() {
+                self.traverse(&path, cancellation_token)?;
+            } else {
+                self.processor.process_file(&path);
             }
         }
 
