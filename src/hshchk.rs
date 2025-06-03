@@ -75,6 +75,31 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
                 .short("u")
                 .long("sum")
                 .help("Use hash sum (e.g. sha1sum) file format"),
+        )
+        .arg(
+            Arg::with_name("report_file")
+                .long("report-file")
+                .takes_value(true)
+                .value_name("PATH")
+                .help("Output progress and results to a file instead of the console"),
+        )
+        .arg(
+            Arg::with_name("update")
+                .short("x") // Using 'x' as 'u' is for --sum and 'c' for --create
+                .long("update")
+                .help("Update an existing checksum file with new/changed files"),
+        )
+        .arg(
+            Arg::with_name("remove_missing")
+                .long("remove-missing")
+                .requires("update")
+                .help("When updating, remove entries from checksum file if their corresponding files are missing on disk"),
+        )
+        .arg(
+            Arg::with_name("force_rehash")
+                .long("force-rehash")
+                .requires("update")
+                .help("When updating, re-hash files even if their size and modification times appear unchanged"),
         );
 
     let matches = app.get_matches_safe()?;
@@ -101,7 +126,7 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
     })
     .expect("Failed to set Ctrl-C handler.");
 
-    let processor = HashFileProcessor::new(HashFileProcessOptions {
+    let options = HashFileProcessOptions {
         base_path: target_path,
         hash_file_format: Some(hash_file_format),
         hash_type: Some(hash_type),
@@ -110,12 +135,24 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
         size_only: Some(matches.is_present("size")),
         match_pattern: matches.value_of("match"),
         ignore_pattern: matches.value_of("ignore"),
-    });
+        update_mode: matches.is_present("update"),
+        remove_missing_in_update: matches.is_present("remove_missing"),
+        force_rehash_in_update: matches.is_present("force_rehash"),
+    };
 
-    let process_type = processor.get_process_type();
-    let ui = ui::UI::new(processor, matches.is_present("silent"));
+    let processor = HashFileProcessor::new(options);
+    let process_type = processor.get_process_type(); // This will be determined by HashFileProcessor based on options
+    let report_file_path = matches.value_of("report_file").map(PathBuf::from);
+    let is_silent = matches.is_present("silent");
 
-    match ui.run(cancellation_token, process_type) {
+    let ui = ui::UI::new(processor, is_silent, report_file_path.clone());
+
+    let result = ui.run(cancellation_token, process_type);
+
+    // Determine if the run was successful based on the detailed result type
+    // The old code just had `Success` which is now `CreateSuccess` or `VerifySuccess` or `UpdateSuccess`
+    match result {
+        HashFileProcessResult::CreateSuccess(_) | HashFileProcessResult::VerifySuccess(_) | HashFileProcessResult::UpdateSuccess(_) => Ok(()),
         HashFileProcessResult::Error => Err(Box::new(Error::new(
             ErrorKind::Other,
             "The hash check process failed.",
@@ -128,7 +165,6 @@ fn run() -> Result<(), Box<dyn (::std::error::Error)>> {
             ErrorKind::NotFound,
             "No files were processed.",
         ))),
-        HashFileProcessResult::Success => Ok(()),
     }
 }
 

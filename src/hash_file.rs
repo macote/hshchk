@@ -49,25 +49,79 @@ impl HashFile {
         }
     }
 
-    pub fn save(&self, file_path: &Path, hash_file_format: HashFileFormat) {
-        let file = create_file(&file_path);
+    pub fn save(&self, file_path: &Path, hash_file_format: HashFileFormat, use_temp_file: bool) {
+        let actual_file_path = file_path;
+        let temp_file_path = if use_temp_file {
+            actual_file_path.with_extension(
+                actual_file_path.extension()
+                    .map_or_else(|| std::ffi::OsString::from("tmp"), |ext| {
+                        let mut temp_ext = ext.to_os_string();
+                        temp_ext.push(".tmp");
+                        temp_ext
+                    })
+            )
+        } else {
+            actual_file_path.to_path_buf() // Write directly if not using temp file
+        };
+
+        let target_path_for_writing = if use_temp_file { &temp_file_path } else { actual_file_path };
+
+        let file = create_file(target_path_for_writing); // create_file truncates/creates
         let mut writer = BufWriter::new(&file);
         let entry_format = match hash_file_format {
             HashFileFormat::HashCheck => format_hash_check_entry,
             HashFileFormat::HashSum => format_hash_sum_entry,
         };
-        for file_entry in self.files.values() {
+
+        // Sort entries by file_path for consistent output order
+        let mut sorted_entries: Vec<_> = self.files.values().collect();
+        sorted_entries.sort_by_key(|entry| &entry.file_path);
+
+        for file_entry in sorted_entries {
             let line = &entry_format(file_entry);
             if let Err(why) = writer.write(line.as_bytes()) {
-                panic!("Couldn't write to {}: {}.", file_path.display(), why)
-            };
+                // If writing to temp file failed, try to clean it up.
+                if use_temp_file {
+                    let _ = std::fs::remove_file(&temp_file_path);
+                }
+                panic!("Couldn't write to {}: {}.", target_path_for_writing.display(), why);
+            }
+        }
+
+        // Ensure writer is flushed and file closed before rename
+        writer.flush().unwrap();
+        drop(file); // Explicitly drop to close file handle
+
+        if use_temp_file {
+            if let Err(why) = std::fs::rename(&temp_file_path, actual_file_path) {
+                // Try to clean up temp file if rename fails
+                let _ = std::fs::remove_file(&temp_file_path);
+                panic!(
+                    "Couldn't rename temp file {} to {}: {}",
+                    temp_file_path.display(),
+                    actual_file_path.display(),
+                    why
+                );
+            }
         }
     }
 
-    pub fn add_entry(&mut self, file_entry: HashFileEntry) {
+    // Renaming for clarity, functionality is the same (upsert)
+    pub fn upsert_entry(&mut self, file_entry: HashFileEntry) {
         self.files.insert(file_entry.file_path.clone(), file_entry);
     }
 
+    // Keep add_entry for compatibility if other parts of crate use it, make it call upsert_entry
+    pub fn add_entry(&mut self, file_entry: HashFileEntry) {
+        self.upsert_entry(file_entry);
+    }
+
+    // Add an explicit update_entry that also calls upsert_entry for clarity in Update mode.
+    pub fn update_entry(&mut self, file_entry: HashFileEntry) {
+        self.upsert_entry(file_entry);
+    }
+
+    // Corrected remove_entry
     pub fn remove_entry(&mut self, file_path: &str) {
         self.files.remove(file_path);
     }
