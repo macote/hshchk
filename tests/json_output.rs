@@ -230,7 +230,7 @@ fn output_options_after_double_dash_are_positional_not_json_requests() {
     assert!(output.stdout.is_empty());
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 fn non_unicode_diagnostic_paths_are_explicitly_marked_lossy() {
     use std::os::unix::ffi::OsStringExt;
@@ -240,6 +240,32 @@ fn non_unicode_diagnostic_paths_are_explicitly_marked_lossy() {
     let value = document(cli("create", root.path(), &[]), 2);
     assert_eq!(value["diagnostics"][0]["path_is_lossy"], true);
     assert_eq!(value["diagnostics"][0]["kind"], "invalid_unicode_file_name");
+}
+
+#[cfg(unix)]
+#[test]
+fn non_unicode_paths_in_owned_outcomes_are_marked_lossy() {
+    use std::os::unix::ffi::OsStringExt;
+    // macOS rejects these names on disk, but owned diagnostics can still contain them.
+    let outcome = ProcessOutcome {
+        process_type: HashFileProcessType::Create,
+        status: ProcessStatus::Error,
+        stats: ProcessStats {
+            errors: 1,
+            ..ProcessStats::default()
+        },
+        diagnostics: vec![ProcessDiagnostic {
+            level: DiagnosticLevel::Error,
+            file_path: std::ffi::OsString::from_vec(vec![b'f', 0xff]).into(),
+            state: FileProcessState::InvalidUnicodeFileName,
+        }],
+        dry_run: false,
+        manifest_written: false,
+    };
+    let value = report::json_report(&outcome);
+    validate(&value);
+    assert_eq!(value["diagnostics"][0]["path"], "f\u{fffd}");
+    assert_eq!(value["diagnostics"][0]["path_is_lossy"], true);
 }
 
 #[cfg(target_os = "linux")]
