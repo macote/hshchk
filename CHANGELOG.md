@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-10-12
+
+This release adds explicit CLI operations, reliable manifest updates, structured results,
+JSON output, shell completions, and refreshed release packages. Read the migration notes
+before upgrading from 0.1.0, especially the exit codes and manifest replacement rules.
+
 ### Added
 - Explicit create, verify, and update commands while retaining the directory shortcut.
 - Checksum-file selection, format selection, discovery ambiguity errors, and filename variants.

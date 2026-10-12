@@ -27,6 +27,18 @@ Inspect assets and release notes before publishing manually. Re-running the tag 
 
 No crates.io publication is automated. A package check is validation, not publication; publishing the crate remains a separate release action.
 
+## Testing an archive on another machine
+
+Copy the archive, its `.sha256` sidecar, and `scripts/smoke_release.py` to an isolated temporary directory on the target machine. Python 3.9+ is sufficient; Rust and administrator privileges are unnecessary.
+
+```sh
+python3 smoke_release.py --archive hshchk-0.2.0-aarch64-unknown-linux-gnu.tar.gz
+```
+
+The script checks the checksum and packaged documents, extracts only the executable into a fresh temporary directory, and exercises all seven algorithms in both manifest formats. It checks same-size edits, dry-run preservation, overwrite refusal, missing/extra files, filtered removal, error exit codes, JSON, Unicode paths, reports, redirected output, and completions. Available Bash, Zsh, and Fish shells also check completion syntax. Success is printed as one JSON record after the temporary test files are removed. It never installs a binary or changes shell profiles.
+
+Remove only the upload directory you created after recording the result. Keep archive checksums and the tested commit in the release PR so hardware results are tied to the exact build.
+
 ## Local packaging
 
 Python 3.11+ and a built native release binary are required:
