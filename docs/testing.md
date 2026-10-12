@@ -30,6 +30,7 @@ Unit-test modules live in `src/tests/` so cargo-llvm-cov's default test-director
 CI pins cargo-llvm-cov to 0.9.1. With that tool installed and the rustup llvm-tools-preview component available, a Bash reproduction is:
 
 ```sh
+mkdir -p coverage
 export CARGO_TARGET_DIR="$PWD/target/coverage"
 source <(cargo llvm-cov show-env --sh)
 cargo llvm-cov clean --workspace

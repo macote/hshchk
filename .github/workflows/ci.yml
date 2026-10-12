@@ -130,6 +130,7 @@ jobs:
         env:
           BINARY: ${{ matrix.binary }}
         run: |
+          mkdir -p coverage
           export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target/coverage"
           echo "CARGO_TARGET_DIR=$CARGO_TARGET_DIR" >> "$GITHUB_ENV"
           source <(cargo llvm-cov show-env --sh)
