@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Independent CLI workflows; Python 3.9+ stdlib, usable with any candidate binary."""
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -12,6 +13,20 @@ import unittest
 
 BINARY = None
 VECTORS = json.loads((Path(__file__).parent / "fixtures/digest-vectors.json").read_text(encoding="utf-8"))
+
+
+@contextmanager
+def unwritable_stream(path):
+    if os.name == "nt":
+        with path.open("rb") as stream:
+            yield stream
+    else:
+        # Rust treats EBADF on Unix standard streams as a closed/no-op stream.
+        # A closed downstream pipe produces the real output error (EPIPE).
+        reader, writer = os.pipe()
+        os.close(reader)
+        with os.fdopen(writer, "wb", buffering=0) as stream:
+            yield stream
 
 
 class CliWorkflows(unittest.TestCase):
@@ -201,19 +216,19 @@ class CliWorkflows(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("--output", result.stdout.splitlines())
 
-    def test_read_only_stdout_reports_errors_without_losing_saved_manifest(self):
+    def test_unwritable_stdout_reports_errors_without_losing_saved_manifest(self):
         (self.root / "file").write_bytes(b"data")
         output = self.work / "read-only-output"
         output.write_bytes(b"preserve output")
         for output_mode in ["json", "text"]:
-            with self.subTest(output_mode=output_mode), output.open("rb") as stream:
+            with self.subTest(output_mode=output_mode), unwritable_stream(output) as stream:
                 child = subprocess.run([str(BINARY), "create", str(self.root), "--overwrite", "--output", output_mode],
                                        stdout=stream, stderr=subprocess.PIPE, timeout=30)
                 self.assertEqual(child.returncode, 2, child.stderr)
                 self.assertIn(b"Cannot write", child.stderr)
             self.assertEqual(output.read_bytes(), b"preserve output")
             self.command("verify")
-        with output.open("rb") as stream:
+        with unwritable_stream(output) as stream:
             child = subprocess.run([str(BINARY), "completions", "bash"], stdout=stream,
                                    stderr=subprocess.PIPE, timeout=30)
         self.assertEqual(child.returncode, 2, child.stderr)
@@ -229,7 +244,7 @@ class CliWorkflows(unittest.TestCase):
         file.write_bytes(b"")
         error_stream = self.work / "read-only-error-output"
         error_stream.write_bytes(b"preserve error output")
-        with error_stream.open("rb") as stream:
+        with unwritable_stream(error_stream) as stream:
             child = subprocess.run([str(BINARY), "update", str(self.root), "--output", "json", "--progress", "always"],
                                    stdout=subprocess.PIPE, stderr=stream, timeout=30)
         self.assertEqual(child.returncode, 2)

@@ -339,7 +339,7 @@
       "tests": [
         "forced_progress_is_on_stderr_and_can_be_disabled",
         "redirected_output_and_summary_use_plain_complete_lines",
-        "test_read_only_stdout_reports_errors_without_losing_saved_manifest",
+        "test_unwritable_stdout_reports_errors_without_losing_saved_manifest",
         "test_unwritable_progress_stream_preserves_manifest_and_returns_json_error"
       ]
     },
