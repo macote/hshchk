@@ -25,12 +25,13 @@ Implemented:
 - README exit-code table, library examples, and compatibility/migration guidance
 
 ## PR 3 - Explicit CLI operations and manifest selection
+Implemented:
 - explicit create, verify, and update subcommands; retain the directory shortcut
 - select a checksum file explicitly; reject ambiguous automatic discovery
 - define relative manifest path resolution and format selection
 - validate incompatible option combinations in the argument parser
 - extend checksum filename detection beyond `<hashType>SUMS`
-- decide whether to align the library default with the CLI's HashSum default
+- retain the library's legacy creation default for compatibility; keep the CLI HashSum default explicit
 - expand help, migration examples, and compatibility tests
 
 ## PR 4 - Machine-readable output and release polish
