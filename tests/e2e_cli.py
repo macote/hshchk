@@ -196,7 +196,7 @@ class CliWorkflows(unittest.TestCase):
             script.write_bytes(subprocess.check_output([str(BINARY), "completions", "bash"], timeout=30))
             result = subprocess.run([shell, "--noprofile", "--norc", "-c",
                                     'source "$1"; COMP_WORDS=(hshchk verify --out); COMP_CWORD=2; '
-                                    '_hshchk; printf "%s\\n" "${COMPREPLY[@]}"', "e2e", str(script)],
+                                    '_hshchk hshchk --out verify; printf "%s\\n" "${COMPREPLY[@]}"', "e2e", str(script)],
                                     capture_output=True, encoding="utf-8", timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("--output", result.stdout.splitlines())
