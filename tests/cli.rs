@@ -176,3 +176,28 @@ fn report_write_failure_blocks_manifest_replacement() {
     assert!(!output.status.success());
     assert_eq!(fs::read(&manifest).unwrap(), original);
 }
+#[test]
+fn every_supported_algorithm_creates_verifies_and_detects_edits() {
+    for algorithm in hshchk::get_hash_types() {
+        let root = TempDir::new().unwrap();
+        fs::write(root.path().join("file"), "data").unwrap();
+        let output = cli(root.path(), &["--type", algorithm, "--silent"]);
+        assert!(
+            output.status.success(),
+            "{}: {}",
+            algorithm,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            cli(root.path(), &["--silent"]).status.success(),
+            "{}",
+            algorithm
+        );
+        fs::write(root.path().join("file"), "tada").unwrap();
+        assert!(
+            !cli(root.path(), &["--silent"]).status.success(),
+            "{}",
+            algorithm
+        );
+    }
+}

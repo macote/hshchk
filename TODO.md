@@ -12,6 +12,7 @@ Implemented:
 - flush report events before saving, preserving manifests on report-write failure
 - detect file identity, size, and modification-time changes during hashing
 - regression tests and stable Linux, macOS, Windows MSVC, and Windows GNU CI
+- tracked dependency lockfile and stable BLAKE3 adapter for reproducible fresh builds
 
 ## PR 2 - Structured results and exit codes
 - one operation outcome containing status, statistics, and retained diagnostics

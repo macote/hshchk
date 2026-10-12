@@ -8,6 +8,7 @@ use std::io;
 use std::path::{Path, MAIN_SEPARATOR};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
+mod blake3_digest;
 mod block_hasher;
 mod file_hash;
 mod file_tree;
@@ -82,7 +83,7 @@ fn get_blake2s_file_hasher(file_path: &Path) -> io::Result<FileHash<Blake2s256>>
     FileHash::new(file_path)
 }
 
-fn get_blake3_file_hasher(file_path: &Path) -> io::Result<FileHash<blake3::Hasher>> {
+fn get_blake3_file_hasher(file_path: &Path) -> io::Result<FileHash<blake3_digest::Blake3Digest>> {
     FileHash::new(file_path)
 }
 

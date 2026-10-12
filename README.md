@@ -77,10 +77,12 @@ The CLI returns exit code 0 on success and a nonzero code on failure, cancellati
 # Development
 
 ``` shell
-cargo test --all-targets
+cargo test --locked --all-targets
 cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
+cargo clippy --locked --all-targets -- -D warnings
 ```
+
+Cargo.lock is tracked for reproducible CLI builds, and CI tests the locked dependency set. BLAKE3 uses its stable native API through a local digest adapter rather than its experimental trait integration.
 
 The CLI uses HashSum by default. Library callers using `HashFileProcessOptions::default()` retain the legacy format unless they explicitly select `HashFileFormat::HashSum`.
 

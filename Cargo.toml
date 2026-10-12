@@ -40,7 +40,6 @@ features = ["cargo", "suggestions", "wrap_help"]
 
 [dependencies.blake3]
 version = "1.8"
-features = ["traits-preview"]
 
 [dev-dependencies]
 test_shared = { path = "test_shared" }
