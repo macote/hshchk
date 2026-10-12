@@ -68,3 +68,5 @@ jobs:
         run: cargo +stable fmt --all -- --check
       - name: Check Clippy
         run: cargo +stable clippy --locked --all-targets -- -D warnings
+      - name: Validate source package
+        run: cargo +stable package --locked

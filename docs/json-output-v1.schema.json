@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "hshchk operation report v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "operation",
+    "status",
+    "exit_code",
+    "dry_run",
+    "manifest_written",
+    "stats",
+    "diagnostics"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "operation": {
+      "enum": [
+        "create",
+        "verify",
+        "update",
+        null
+      ]
+    },
+    "status": {
+      "enum": [
+        "success",
+        "verification_failed",
+        "error",
+        "no_files_processed",
+        "canceled"
+      ]
+    },
+    "exit_code": {
+      "enum": [
+        0,
+        1,
+        2,
+        130
+      ]
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "manifest_written": {
+      "type": "boolean"
+    },
+    "stats": {
+      "type": "object",
+      "required": [
+        "files_processed",
+        "bytes_hashed",
+        "bytes_size_checked",
+        "files_added",
+        "files_updated",
+        "files_unchanged",
+        "files_removed",
+        "missing_files",
+        "extra_files",
+        "errors",
+        "elapsed_ms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "files_processed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes_hashed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes_size_checked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "files_added": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "files_updated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "files_unchanged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "files_removed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "extra_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    }
+  },
+  "$defs": {
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "level",
+        "path",
+        "path_is_lossy",
+        "kind",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "enum": [
+            "warning",
+            "error"
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path_is_lossy": {
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "extra",
+            "invalid_unicode_file_name",
+            "missing",
+            "incorrect_size",
+            "incorrect_hash",
+            "error",
+            "usage_error",
+            "configuration_error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "verification_failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "error"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "no_files_processed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "canceled"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 130
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "dry_run": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "manifest_written": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "verify"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "manifest_written": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "verification_failed",
+              "no_files_processed",
+              "canceled"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "manifest_written": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "error"
+          },
+          "manifest_written": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
+}

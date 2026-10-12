@@ -1,8 +1,12 @@
 use clap::{command, Arg, ArgAction, ArgMatches, Command};
+use clap_complete::aot::{generate, Shell};
 use hshchk::hash_file_process::{
     HashFileProcessOptions, HashFileProcessType, HashFileProcessor, ProcessOutcome,
 };
+use hshchk::report;
 use hshchk::{get_hash_types, ui, HashFileFormat};
+use std::ffi::OsString;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tokio_util::sync::CancellationToken;
@@ -14,7 +18,9 @@ fn common_args(command: Command) -> Command {
             .help("Creation algorithm or discovery filter; required to read a custom manifest name"))
         .arg(Arg::new("checksum-file").long("checksum-file").value_name("PATH").value_parser(clap::value_parser!(PathBuf))
             .help("Select a manifest; relative paths resolve against the target directory"))
-        .arg(Arg::new("silent").short('s').long("silent").action(ArgAction::SetTrue).help("Suppress progress and stdout summaries; retain diagnostics"))
+        .arg(Arg::new("output").long("output").value_parser(["text", "json"]).default_value("text")
+            .help("Final result format; JSON is one versioned object, including failures"))
+        .arg(Arg::new("silent").short('s').long("silent").action(ArgAction::SetTrue).help("Suppress progress and human summaries; retain diagnostics and requested JSON"))
         .arg(Arg::new("match").short('m').long("match").value_name("PATTERN").help("Select relative paths matching this regex"))
         .arg(Arg::new("ignore").short('i').long("ignore").value_name("PATTERN").help("Exclude relative paths matching this regex"))
         .arg(Arg::new("report-file").long("report-file").value_parser(clap::value_parser!(PathBuf)).value_name("PATH")
@@ -95,6 +101,8 @@ fn cli() -> Command {
             .arg(Arg::new("overwrite").long("overwrite").action(ArgAction::SetTrue).help("Authorize replacing the selected manifest")))
         .subcommand(verification_args(common_args(Command::new("verify").about("Verify an existing checksum manifest"))))
         .subcommand(update_args(common_args(Command::new("update").about("Update an existing checksum manifest by rehashing selected files")), false))
+        .subcommand(Command::new("completions").about("Print a shell completion script without processing files")
+            .arg(Arg::new("shell").required(true).value_parser(clap::value_parser!(Shell)).ignore_case(true)))
 }
 
 fn flag(matches: &ArgMatches, name: &str) -> bool {
@@ -113,14 +121,12 @@ fn value<'a>(matches: &'a ArgMatches, name: &str) -> Option<&'a str> {
         .map(String::as_str)
 }
 
-fn run() -> Result<ProcessOutcome, Box<dyn std::error::Error>> {
-    let matches = cli().try_get_matches()?;
-    let (process_type, matches, explicit_command) = match matches.subcommand() {
-        Some(("create", args)) => (Some(HashFileProcessType::Create), args, true),
-        Some(("verify", args)) => (Some(HashFileProcessType::Verify), args, true),
-        Some(("update", args)) => (Some(HashFileProcessType::Update), args, true),
-        _ => (None, &matches, false),
-    };
+fn process(
+    matches: &ArgMatches,
+    process_type: Option<HashFileProcessType>,
+    explicit_command: bool,
+    json: bool,
+) -> Result<ProcessOutcome, Box<dyn std::error::Error>> {
     let hash_file_format = if flag(matches, "hc") || value(matches, "format") == Some("hashcheck") {
         HashFileFormat::HashCheck
     } else {
@@ -153,18 +159,96 @@ fn run() -> Result<ProcessOutcome, Box<dyn std::error::Error>> {
     Ok(ui::UI::new(processor, flag(matches, "silent"))
         .with_report_file(matches.get_one::<PathBuf>("report-file").cloned())
         .with_progress(progress)
+        .with_stdout_summary(!json)
         .run_outcome(token))
 }
 
+// On parser failure there are no ArgMatches. Only recognize an explicit JSON
+// request before `--`, so a directory or positional value cannot opt into JSON.
+fn json_requested(args: &[OsString]) -> bool {
+    let mut args = args.iter().skip(1).take_while(|arg| *arg != "--");
+    while let Some(arg) = args.next() {
+        if arg == "--output=json"
+            || (arg == "--output" && args.next().is_some_and(|value| value == "json"))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn json_exit(value: &serde_json::Value, code: u8) -> ExitCode {
+    if let Err(error) = report::write_json(value, io::stdout().lock()) {
+        eprintln!("Cannot write JSON output: {}", error);
+        return ExitCode::from(2);
+    }
+    ExitCode::from(code)
+}
+
 fn main() -> ExitCode {
-    match run() {
-        Ok(outcome) => ExitCode::from(outcome.status.exit_code()),
+    let args: Vec<_> = std::env::args_os().collect();
+    let matches = match cli().try_get_matches_from(&args) {
+        Ok(matches) => matches,
         Err(error) => {
-            if let Some(error) = error.downcast_ref::<clap::Error>() {
-                let _ = error.print();
-                ExitCode::from(error.exit_code() as u8)
+            let _ = error.print();
+            let code = error.exit_code() as u8;
+            if code != 0 && json_requested(&args) {
+                return json_exit(
+                    &report::error_report(None, false, true, &error.to_string()),
+                    code,
+                );
+            }
+            return ExitCode::from(code);
+        }
+    };
+    if let Some(("completions", args)) = matches.subcommand() {
+        let shell = *args.get_one::<Shell>("shell").unwrap();
+        let mut script = Vec::new();
+        generate(shell, &mut cli(), "hshchk", &mut script);
+        if let Err(error) = io::stdout().lock().write_all(&script) {
+            eprintln!("Cannot write completions: {}", error);
+            return ExitCode::from(2);
+        }
+        return ExitCode::SUCCESS;
+    }
+    let (process_type, matches, explicit_command) = match matches.subcommand() {
+        Some(("create", args)) => (Some(HashFileProcessType::Create), args, true),
+        Some(("verify", args)) => (Some(HashFileProcessType::Verify), args, true),
+        Some(("update", args)) => (Some(HashFileProcessType::Update), args, true),
+        _ => (None, &matches, false),
+    };
+    let json = value(matches, "output") == Some("json");
+    match process(matches, process_type, explicit_command, json) {
+        Ok(outcome) => {
+            let code = outcome.status.exit_code();
+            if json {
+                json_exit(&report::json_report(&outcome), code)
             } else {
-                eprintln!("{}", error);
+                ExitCode::from(code)
+            }
+        }
+        Err(error) => {
+            eprintln!("{}", error);
+            let mode = process_type.or_else(|| {
+                if flag(matches, "create") {
+                    Some(HashFileProcessType::Create)
+                } else if flag(matches, "update") {
+                    Some(HashFileProcessType::Update)
+                } else {
+                    None
+                }
+            });
+            if json {
+                json_exit(
+                    &report::error_report(
+                        mode,
+                        flag(matches, "dry-run"),
+                        false,
+                        &error.to_string(),
+                    ),
+                    2,
+                )
+            } else {
                 ExitCode::from(2)
             }
         }

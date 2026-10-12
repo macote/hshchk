@@ -6,3 +6,6 @@ rustflags = [
 
 [target.armv7-unknown-linux-gnueabihf]
 linker = "arm-linux-gnueabihf-gcc"
+
+[target.'cfg(all(target_arch="x86", target_os="windows"))']
+rustflags = ["-Ctarget-feature=+crt-static"]

@@ -8,3 +8,6 @@
 **/*.rs.bk
 
 /.vscode/
+# Locally generated release packages
+/dist/
+/scripts/__pycache__/

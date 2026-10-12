@@ -10,6 +10,7 @@ use unicode_segmentation::UnicodeSegmentation;
 pub struct Output {
     report: Option<File>,
     quiet: bool,
+    stdout_summary: bool,
     progress: bool,
     width: usize,
     last_refresh: Option<Instant>,
@@ -17,13 +18,19 @@ pub struct Output {
 }
 
 impl Output {
-    pub fn new(report: Option<&Path>, quiet: bool, progress: Option<bool>) -> io::Result<Self> {
+    pub fn new(
+        report: Option<&Path>,
+        quiet: bool,
+        progress: Option<bool>,
+        stdout_summary: bool,
+    ) -> io::Result<Self> {
         let report = report
             .map(|path| OpenOptions::new().create(true).append(true).open(path))
             .transpose()?;
         Ok(Self {
             report,
             quiet,
+            stdout_summary,
             progress: !quiet && progress.unwrap_or_else(|| io::stderr().is_terminal()),
             width: terminal_size::terminal_size()
                 .map_or(80, |(width, _)| usize::from(width.0))
@@ -121,7 +128,7 @@ impl Output {
         ];
         for line in lines {
             self.report_line(&line)?;
-            if !self.quiet {
+            if !self.quiet && self.stdout_summary {
                 writeln!(io::stdout(), "{}", line)?;
             }
         }
