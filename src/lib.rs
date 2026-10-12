@@ -15,6 +15,7 @@ mod file_tree;
 mod hash_file;
 pub mod hash_file_process;
 mod output;
+pub mod report;
 mod speed;
 pub mod ui;
 

@@ -195,6 +195,7 @@ pub struct HashFileProcessor {
     dry_run: bool,
     seen_paths: HashSet<String>,
     excluded_paths: HashSet<PathBuf>,
+    console_outputs: Vec<same_file::Handle>,
     bytes_processed_notification_block_size: usize,
     cancellation_token: Option<CancellationToken>,
     progress_event: Option<Sender<FileProgress>>,
@@ -370,6 +371,7 @@ impl HashFileProcessor {
             dry_run: options.dry_run,
             seen_paths: HashSet::new(),
             excluded_paths,
+            console_outputs: Vec::new(),
             bytes_processed_notification_block_size:
                 DEFAULT_BYTES_PROCESSED_NOTIFICATION_BLOCK_SIZE,
             cancellation_token: None,
@@ -397,6 +399,12 @@ impl HashFileProcessor {
     }
     pub fn is_dry_run(&self) -> bool {
         self.dry_run
+    }
+    pub(crate) fn exclude_console_destinations(&mut self) {
+        self.console_outputs =
+            IntoIterator::into_iter([same_file::Handle::stdout(), same_file::Handle::stderr()])
+                .filter_map(Result::ok)
+                .collect();
     }
     pub(crate) fn set_before_save(
         &mut self,
@@ -557,6 +565,10 @@ impl HashFileProcessor {
                 .excluded_paths
                 .iter()
                 .any(|excluded| same_file::is_same_file(path, excluded).unwrap_or(false))
+            || (!self.console_outputs.is_empty()
+                && same_file::Handle::from_path(path).is_ok_and(|handle| {
+                    self.console_outputs.iter().any(|output| output == &handle)
+                }))
     }
     fn handle_error(&mut self, path: &Path, state: FileProcessState) {
         self.error_occurred = true;

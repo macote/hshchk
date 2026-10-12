@@ -11,6 +11,7 @@ pub struct UI {
     silent: bool,
     report_file: Option<PathBuf>,
     progress: Option<bool>,
+    stdout_summary: bool,
 }
 
 impl UI {
@@ -20,10 +21,16 @@ impl UI {
             silent,
             report_file: None,
             progress: None,
+            stdout_summary: true,
         }
     }
     pub fn with_report_file(mut self, path: Option<PathBuf>) -> Self {
         self.report_file = path;
+        self
+    }
+    /// Disable console summaries when another renderer owns stdout (for example JSON).
+    pub fn with_stdout_summary(mut self, enabled: bool) -> Self {
+        self.stdout_summary = enabled;
         self
     }
     pub fn with_progress(mut self, progress: Option<bool>) -> Self {
@@ -40,6 +47,7 @@ impl UI {
     }
 
     pub fn run_outcome(mut self, token: CancellationToken) -> ProcessOutcome {
+        self.processor.exclude_console_destinations();
         let mode = self.processor.get_process_type();
         let dry_run = self.processor.is_dry_run();
         // Validate before opening: the report must never append to the manifest.
@@ -54,7 +62,12 @@ impl UI {
                 );
             }
         }
-        let output = match Output::new(self.report_file.as_deref(), self.silent, self.progress) {
+        let output = match Output::new(
+            self.report_file.as_deref(),
+            self.silent,
+            self.progress,
+            self.stdout_summary,
+        ) {
             Ok(output) => output,
             Err(error) => {
                 eprintln!("Cannot open report: {}", error);

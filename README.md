@@ -69,7 +69,7 @@ hshchk path/to/folder --update
 
 The directory shortcut verifies a discovered manifest or creates one when none is found. Legacy `--create` / `-c` still authorizes overwriting; legacy `--update` / `-x` still requires an existing manifest. Discovery now rejects ambiguity, and `--type` filters candidates rather than preferring one algorithm and falling back to others. With the shortcut, no candidate for the selected algorithm triggers creation; use explicit `verify` when creation is not intended.
 
-For directories named `create`, `verify`, or `update`, use an explicit path such as `./create`, or `hshchk -- create`. Place options after the command and target directory; shortcut arguments cannot be mixed with subcommands.
+For directories named `create`, `verify`, `update`, or `completions`, use an explicit path such as `./create`, or `hshchk -- create`. Place options after the command and target directory; shortcut arguments cannot be mixed with subcommands.
 
 | Option | Purpose |
 | --- | --- |
@@ -84,8 +84,9 @@ For directories named `create`, `verify`, or `update`, use an explicit path such
 | `--remove-missing` | Update only: remove selected missing entries. |
 | `--dry-run` | Update only: compute proposed counts without replacing the manifest. |
 | `--report-file <path>` | Append hashing records, diagnostics, and a summary; relative to the working directory. |
+| `--output text\|json` | Select a human summary or one versioned JSON result. |
 | `--progress auto\|always\|never` | Control live progress on stderr; defaults to terminal detection. |
-| `--silent` / `-s` | Suppress live progress and stdout summaries; retain diagnostics and report output. |
+| `--silent` / `-s` | Suppress progress and human summaries; retain diagnostics, reports, and explicitly requested JSON. |
 
 Filters match paths relative to the target directory, with `/` as the separator on every platform. The same rule applies to traversal and missing-entry detection. Excluded entries are preserved during update, including with `--remove-missing`.
 
@@ -102,6 +103,40 @@ Manifest saves use sorted entries and a unique temporary file in the destination
 The report and active manifest are excluded from hashing. A report cannot alias the manifest, including through a hard link. Reports append to existing files and an unavailable report path fails before processing begins.
 
 Live progress and diagnostics go to stderr. Final summaries go to stdout and use complete lines. Redirected output defaults to no live progress. Statistics distinguish bytes actually hashed from sizes inspected without hashing; counts on failed or canceled runs describe work performed, not committed manifest changes.
+
+The CLI excludes identifiable redirected stdout/stderr files from hashing, including output files inside the target directory. Use result paths distinct from input files and the checksum manifest: shell redirection opens/truncates its destination before the CLI starts.
+
+## Machine-readable output
+
+```sh
+hshchk verify files --output json > result.json
+hshchk update files --dry-run --output json --silent
+```
+
+JSON mode emits one compact result object with schema version, operation, status, exit code, statistics, retained diagnostics, dry-run flag, and manifest-written state. It also reports usage/configuration failures as JSON. Progress stays on stderr, and report files remain human-readable. Help, version, and completion commands produce text.
+
+See the [JSON v1 contract](docs/json-output-v1.md) and [JSON Schema](docs/json-output-v1.schema.json) for field definitions, failure behavior, and examples.
+
+## Shell completions
+
+Generate scripts for Bash, Zsh, Fish, PowerShell, or Elvish without processing files:
+
+```sh
+hshchk completions bash > hshchk.bash
+source ./hshchk.bash
+hshchk completions zsh > _hshchk
+hshchk completions fish > hshchk.fish
+hshchk completions elvish > hshchk.elv
+```
+
+For Zsh, place `_hshchk` in a directory on `$fpath` and initialize completion with `compinit`. For Fish, place the script in `~/.config/fish/completions/hshchk.fish`. For Elvish, load the generated module according to your shell configuration. PowerShell can load the script for the current session:
+
+```powershell
+hshchk completions powershell | Out-File -Encoding utf8 hshchk.ps1
+. ./hshchk.ps1
+```
+
+Release archives include the generated scripts. See [release validation](docs/releasing.md) and [migration notes](CHANGELOG.md).
 
 ## Exit codes
 
@@ -150,6 +185,8 @@ Configuration errors are returned by `try_new`; errors encountered during proces
 
 `HashFileProcessOptions` also accepts `process_type`, `checksum_file`, and `overwrite` for explicit operations and selection. Leave `process_type` unset for the compatibility auto mode. `checksum_file_path()`, `hash_type()`, and `hash_file_format()` expose the resolved configuration.
 
+`hshchk::report::json_report(&outcome)` converts a library result to the documented JSON v1 shape; `write_json(&value, writer)` writes a single JSON record without terminal output.
+
 The existing `process()`, `process_with_cancellation_token()`, `stats()`, event senders, and `UI::run()` remain available. Their `HashFileProcessResult::Error` combines verification and operational failures; use the new outcome API to distinguish them. Cancellation and failures retain statistics for work already completed.
 
 # Development
@@ -168,3 +205,4 @@ The CLI uses HashSum by default. Library callers using `HashFileProcessOptions::
 # License
 
 MIT
+

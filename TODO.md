@@ -35,11 +35,13 @@ Implemented:
 - expand help, migration examples, and compatibility tests
 
 ## PR 4 - Machine-readable output and release polish
+Implemented:
 - JSON output built on the structured operation outcome
 - validate the schema for success, mismatch, failure, and cancellation
 - keep progress and diagnostics separate from structured stdout
 - shell completions, help examples, and release/migration documentation
-- release validation on all supported platforms
+- native release smoke checks, cross-built archive checks, and refreshed draft-only release automation
+- retain the original release targets and add Apple Silicon; ARM hardware runtime checks remain manual
 
 ## Later work
 - total file/byte progress and remaining-time estimates
