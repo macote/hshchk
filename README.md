@@ -1,3 +1,4 @@
+[![GitHub release](https://img.shields.io/github/v/release/macote/hshchk)](https://github.com/macote/hshchk/releases/latest)
 [![crates.io](https://img.shields.io/crates/v/hshchk.svg)](https://crates.io/crates/hshchk)
 
 # hshchk
