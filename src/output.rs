@@ -1,6 +1,4 @@
-use crate::hash_file_process::{
-    FileProcessEntry, FileProgress, HashFileProcessResult, HashFileProcessType, ProcessStats,
-};
+use crate::hash_file_process::{FileProcessEntry, FileProgress, ProcessOutcome};
 use crate::speed::get_speed;
 use num_format::{Locale, ToFormattedString};
 use std::fs::{File, OpenOptions};
@@ -99,13 +97,11 @@ impl Output {
         writeln!(io::stderr(), "{}", line)?;
         self.report_line(&line)
     }
-    pub fn write_result(
-        &mut self,
-        mode: HashFileProcessType,
-        result: HashFileProcessResult,
-        stats: &ProcessStats,
-        dry_run: bool,
-    ) -> io::Result<()> {
+    pub fn write_result(&mut self, outcome: &ProcessOutcome) -> io::Result<()> {
+        let mode = outcome.process_type;
+        let result = outcome.status;
+        let stats = &outcome.stats;
+        let dry_run = outcome.dry_run;
         self.clear_progress()?;
         let speed = if stats.elapsed_ms == 0 {
             "N/A".to_string()

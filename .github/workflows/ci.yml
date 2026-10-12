@@ -53,6 +53,8 @@ jobs:
         run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal
       - name: Run tests
         run: cargo +${{ matrix.toolchain }} test --locked --all-targets
+      - name: Compile library examples
+        run: cargo +${{ matrix.toolchain }} test --locked --doc
 
   quality:
     name: formatting and clippy

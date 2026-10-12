@@ -2,16 +2,16 @@
 
 # hshchk
 
-`hshchk` lets you create and verify checksums on folder files recursively.
+`hshchk` creates, verifies, and updates checksums for files in a directory tree.
 
 # Installation
 
 ## dpkg
 
-Download the latest `.deb` package from the [release page](https://github.com/macote/hshchk/releases) and install it via:
+Download a `.deb` package for your architecture from the [release page](https://github.com/macote/hshchk/releases). In the directory containing that package, install it with:
 
 ``` bash
-sudo dpkg -i hshchk-0.1.0-x86_64-unknown-linux-gnu.deb  # adapt version number and architecture
+sudo dpkg -i ./hshchk-*.deb
 ```
 
 ## Other
@@ -19,7 +19,7 @@ sudo dpkg -i hshchk-0.1.0-x86_64-unknown-linux-gnu.deb  # adapt version number a
 Download an appropriate package from the release page, or build from source with the Rust toolchain:
 
 ``` shell
-cargo build --release
+cargo build --locked --release
 ```
 
 The executable is `target/release/hshchk` (`target/release/hshchk.exe` on Windows).
@@ -72,12 +72,58 @@ The report and active manifest are excluded from hashing. A report cannot alias 
 
 Live progress and diagnostics go to stderr. Final summaries go to stdout and use complete lines. Redirected output defaults to no live progress. Statistics distinguish bytes actually hashed from sizes inspected without hashing; counts on failed or canceled runs describe work performed, not committed manifest changes.
 
-The CLI returns exit code 0 on success and a nonzero code on failure, cancellation, or when no files are processed. Press Ctrl+C to cancel processing.
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Successful create, verify, update, or dry-run; also help and version output. |
+| `1` | Verification found an incorrect hash, incorrect recorded size, or missing file. |
+| `2` | Invalid arguments or configuration, filesystem/manifest/output errors, or no files processed. |
+| `130` | Processing was canceled with Ctrl+C. |
+
+Warnings about extra files or retained missing entries during update do not fail the run. Operational errors take precedence over verification mismatches. An output failure returns `2`, including when it occurs while writing the final summary after the manifest was saved.
+
+Press Ctrl+C to cancel processing. Cancellation detected before manifest replacement leaves the existing manifest intact.
+
+**Migration:** earlier versions generally returned `1` for any failure. Scripts should now distinguish verification failures (`1`) from usage or operational failures (`2`) and cancellation (`130`). Verification summaries use `VerificationFailed` for mismatches. Existing `--silent`, format options, and the directory shortcut remain available.
+
+# Library use
+
+Use `HashFileProcessor::try_new` to validate configuration, then call `process_outcome()` or `process_outcome_with_cancellation_token(token)` to get an owned result:
+
+```rust
+use hshchk::hash_file_process::{
+    HashFileProcessOptions, HashFileProcessor, ProcessStatus,
+};
+
+fn main() -> std::io::Result<()> {
+    let mut processor = HashFileProcessor::try_new(HashFileProcessOptions {
+        base_path: "files".into(),
+        ..Default::default()
+    })?;
+    let outcome = processor.process_outcome();
+
+    println!("Status: {:?}; hashed: {} bytes", outcome.status, outcome.stats.bytes_hashed);
+    if outcome.status == ProcessStatus::VerificationFailed {
+        for diagnostic in &outcome.diagnostics {
+            eprintln!("{}: {:?}", diagnostic.file_path.display(), diagnostic.state);
+        }
+    }
+    Ok(())
+}
+```
+
+`ProcessOutcome` contains the operation type, status, statistics, warning/error diagnostics, dry-run flag, and `manifest_written`. Diagnostics are retained even without event subscriptions, and results remain unchanged when the processor is reused. `ProcessStatus::exit_code()` exposes the CLI mapping above.
+
+Configuration errors are returned by `try_new`; errors encountered during processing appear in the outcome. For terminal/report integration, `UI::run_outcome(token)` also retains setup and output errors. Its `manifest_written` flag stays true if saving succeeded before the final output failed.
+
+The existing `process()`, `process_with_cancellation_token()`, `stats()`, event senders, and `UI::run()` remain available. Their `HashFileProcessResult::Error` combines verification and operational failures; use the new outcome API to distinguish them. Cancellation and failures retain statistics for work already completed.
 
 # Development
 
 ``` shell
 cargo test --locked --all-targets
+cargo test --locked --doc
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
 ```
