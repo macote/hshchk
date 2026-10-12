@@ -329,7 +329,7 @@
     },
     {
       "id": "F26",
-      "behavior": "Plain redirected summaries and forced/disabled progress with live binary-unit hashing speed visible for long paths",
+      "behavior": "Plain redirected summaries and forced/disabled progress with two-decimal binary-unit live speed and final throughput, visible for long paths",
       "critical": false,
       "platforms": [
         "Linux",
@@ -339,6 +339,7 @@
       "tests": [
         "forced_progress_is_on_stderr_and_can_be_disabled",
         "live_speed_remains_visible_with_long_unicode_paths",
+        "live_and_final_throughput_share_precision_and_binary_units",
         "redirected_output_and_summary_use_plain_complete_lines",
         "test_unwritable_stdout_reports_errors_without_losing_saved_manifest",
         "test_unwritable_progress_stream_preserves_manifest_and_returns_json_error"

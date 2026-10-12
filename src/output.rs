@@ -99,11 +99,8 @@ impl Output {
         };
         let speed = get_speed(progress.bytes_processed, 0, elapsed_ms);
         let suffix = format!(
-            " ({:.0}%; {} bytes; {} {})",
-            percent,
-            progress.bytes_processed,
-            speed.bytes_per_interval.to_formatted_string(&Locale::en),
-            speed.unit
+            " ({:.0}%; {} bytes; {})",
+            percent, progress.bytes_processed, speed
         );
         let path_width = self.width.saturating_sub(suffix.graphemes(true).count());
         let path: String = progress
@@ -134,12 +131,7 @@ impl Output {
         let speed = if stats.elapsed_ms == 0 {
             "N/A".to_string()
         } else {
-            let speed = get_speed(stats.bytes_hashed, 0, stats.elapsed_ms);
-            format!(
-                "{} {}",
-                speed.bytes_per_interval.to_formatted_string(&Locale::en),
-                speed.unit
-            )
+            get_speed(stats.bytes_hashed, 0, stats.elapsed_ms).to_string()
         };
         let lines = [
             format!("{:?}{}: {:?}", mode, if dry_run { " (dry run; manifest unchanged)" } else { "" }, result),
