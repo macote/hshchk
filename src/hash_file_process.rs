@@ -105,6 +105,7 @@ pub struct HashFileProcessor {
     warning_event: Option<Sender<FileProcessEntry>>,
     error_event: Option<Sender<FileProcessEntry>>,
     complete_event: Option<Sender<HashFileProcessResult>>,
+    before_save: Option<Box<dyn FnMut() -> io::Result<()> + Send>>,
 }
 
 impl HashFileProcessor {
@@ -203,6 +204,7 @@ impl HashFileProcessor {
             warning_event: None,
             error_event: None,
             complete_event: None,
+            before_save: None,
         })
     }
     pub fn get_process_type(&self) -> HashFileProcessType {
@@ -213,6 +215,12 @@ impl HashFileProcessor {
     }
     pub fn is_dry_run(&self) -> bool {
         self.dry_run
+    }
+    pub(crate) fn set_before_save(
+        &mut self,
+        callback: impl FnMut() -> io::Result<()> + Send + 'static,
+    ) {
+        self.before_save = Some(Box::new(callback));
     }
     pub fn exclude_output_file(&mut self, path: &Path) -> io::Result<()> {
         let path = if path.exists() {
@@ -406,6 +414,18 @@ impl HashFileProcessor {
             return HashFileProcessResult::NoFilesProcessed;
         }
         if self.process_type != HashFileProcessType::Verify && !self.dry_run {
+            if let Some(callback) = &mut self.before_save {
+                if let Err(error) = callback() {
+                    self.handle_error(
+                        &self.hash_file_path.clone(),
+                        FileProcessState::Error(format!(
+                            "cannot flush output before saving: {}",
+                            error
+                        )),
+                    );
+                    return HashFileProcessResult::Error;
+                }
+            }
             if let Err(error) = self.hash_file.save(
                 &self.hash_file_path,
                 self.hash_file_format,
@@ -445,6 +465,7 @@ impl FileTreeProcessor for HashFileProcessor {
         }
         if self.process_type != HashFileProcessType::Verify
             && (path.contains(['\n', '\r'])
+                || (cfg!(unix) && path.contains('\\'))
                 || (self.hash_file_format == HashFileFormat::HashCheck && path.contains('|')))
         {
             self.handle_error(
@@ -545,6 +566,10 @@ impl FileTreeProcessor for HashFileProcessor {
             );
             return;
         }
+        if let Err(error) = hasher.validate_file(file_path) {
+            self.handle_error(relative, FileProcessState::Error(error.to_string()));
+            return;
+        }
         let digest = hasher.digest();
         if let Some(sender) = &self.progress_event {
             let _ = sender.send(FileProgress {
@@ -604,4 +629,31 @@ fn get_existing_file_hash_type(
                 None
             }
         })
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn output_flush_failure_prevents_manifest_replacement() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("file");
+        fs::write(&path, "data").unwrap();
+        let mut create = HashFileProcessor::new(HashFileProcessOptions {
+            base_path: root.path().to_path_buf(),
+            ..Default::default()
+        });
+        assert_eq!(create.process(), HashFileProcessResult::Success);
+        let manifest = root.path().join("hshchk.sha1");
+        let original = fs::read(&manifest).unwrap();
+        fs::write(&path, "tada").unwrap();
+        let mut update = HashFileProcessor::new(HashFileProcessOptions {
+            base_path: root.path().to_path_buf(),
+            update_mode: true,
+            ..Default::default()
+        });
+        update.set_before_save(|| Err(io::Error::other("report write failed")));
+        assert_eq!(update.process(), HashFileProcessResult::Error);
+        assert_eq!(fs::read(&manifest).unwrap(), original);
+        assert_eq!(update.stats().errors, 1);
+    }
 }

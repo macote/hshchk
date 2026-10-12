@@ -40,6 +40,12 @@ impl Output {
         }
         Ok(())
     }
+    pub fn flush(&mut self) -> io::Result<()> {
+        if let Some(report) = &mut self.report {
+            report.flush()?;
+        }
+        io::stderr().flush()
+    }
     fn clear_progress(&mut self) -> io::Result<()> {
         if self.line_active {
             write!(io::stderr(), "\r{}\r", " ".repeat(self.width))?;

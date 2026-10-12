@@ -57,11 +57,33 @@ impl UI {
             self.processor.set_progress_event_sender(progress.clone());
         }
         drop(progress);
+        let (flush_sender, mut flush_receiver) =
+            unbounded::<crossbeam::channel::Sender<std::io::Result<()>>>();
+        self.processor.set_before_save(move || {
+            let (reply, response) = unbounded();
+            flush_sender
+                .send(reply)
+                .map_err(|_| std::io::Error::other("output worker stopped"))?;
+            response
+                .recv()
+                .map_err(|_| std::io::Error::other("output worker stopped"))?
+        });
         let renderer = std::thread::spawn(move || -> std::io::Result<Output> {
             let mut output = output;
-            let mut active = 3;
+            let mut active = 4;
             while active > 0 {
                 select! {
+                    recv(flush_receiver) -> message => match message {
+                        Ok(reply) => {
+                            // Hashing has stopped producing events. Drain all queues
+                            // before acknowledging that report output is writable.
+                            for entry in error_receiver.try_iter() { output.write_diagnostic(&entry, false)?; }
+                            for entry in warning_receiver.try_iter() { output.write_diagnostic(&entry, true)?; }
+                            for progress in progress_receiver.try_iter() { output.write_progress(&progress)?; }
+                            let _ = reply.send(output.flush());
+                        },
+                        Err(_) => { flush_receiver = never(); active -= 1; }
+                    },
                     recv(error_receiver) -> message => match message {
                         Ok(entry) => output.write_diagnostic(&entry, false)?,
                         Err(_) => { error_receiver = never(); active -= 1; }

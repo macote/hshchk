@@ -7,6 +7,9 @@ pub trait Hasher {
 }
 
 pub trait BlockHasher: Hasher {
+    fn validate_file(&self, _path: &std::path::Path) -> std::io::Result<()> {
+        Ok(())
+    }
     #[cfg(test)]
     fn compute(&mut self, token: CancellationToken) -> std::io::Result<u64> {
         self.compute_with_progress(token, &mut |_| {})

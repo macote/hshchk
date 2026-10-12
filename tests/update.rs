@@ -271,3 +271,19 @@ fn progress_events_keep_file_identity_and_completion_bytes() {
         assert!(events.iter().all(|event| event.file_size == size));
     }
 }
+#[cfg(unix)]
+#[test]
+fn update_preserves_existing_manifest_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("file"), "data").unwrap();
+    create(root.path(), HashFileFormat::HashCheck);
+    let manifest = root.path().join("hshchk.sha1");
+    fs::set_permissions(&manifest, fs::Permissions::from_mode(0o640)).unwrap();
+    let mut processor = update(root.path(), false, false);
+    assert_eq!(processor.process(), HashFileProcessResult::Success);
+    assert_eq!(
+        fs::metadata(&manifest).unwrap().permissions().mode() & 0o777,
+        0o640
+    );
+}

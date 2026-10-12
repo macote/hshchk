@@ -160,3 +160,19 @@ fn forced_progress_is_on_stderr_and_can_be_disabled() {
     assert!(disabled.status.success());
     assert!(disabled.stderr.is_empty());
 }
+#[cfg(target_os = "linux")]
+#[test]
+fn report_write_failure_blocks_manifest_replacement() {
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("file"), "data").unwrap();
+    assert!(cli(root.path(), &[]).status.success());
+    let manifest = root.path().join("SHA1SUMS");
+    let original = fs::read(&manifest).unwrap();
+    fs::write(root.path().join("file"), "tada").unwrap();
+    let output = cli(
+        root.path(),
+        &["--update", "--report-file", "/dev/full", "--silent"],
+    );
+    assert!(!output.status.success());
+    assert_eq!(fs::read(&manifest).unwrap(), original);
+}
