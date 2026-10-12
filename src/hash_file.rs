@@ -148,12 +148,12 @@ fn parse_hash_sum_entry(line: &str) -> Option<HashFileEntry> {
 fn format_hash_check_entry(entry: &HashFileEntry) -> String {
     format!(
         "{}|{}|{}\n",
-        &entry.file_path,
-        &entry.size.unwrap().to_string(),
-        &entry.digest
+        entry.file_path,
+        entry.size.unwrap(),
+        entry.digest
     )
 }
 
 fn format_hash_sum_entry(entry: &HashFileEntry) -> String {
-    format!("{} *{}\n", &entry.digest, &entry.file_path)
+    format!("{} *{}\n", entry.digest, entry.file_path)
 }
