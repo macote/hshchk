@@ -36,17 +36,7 @@ impl HashFile {
             if line.trim().is_empty() {
                 continue;
             }
-            let entry_format = *format.get_or_insert_with(|| {
-                if line.split_once(' ').is_some_and(|(digest, _)| {
-                    !digest.is_empty() && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
-                }) {
-                    HashFileFormat::HashSum
-                } else if line.contains('|') {
-                    HashFileFormat::HashCheck
-                } else {
-                    HashFileFormat::HashSum
-                }
-            });
+            let entry_format = *format.get_or_insert_with(|| infer_format(&line));
             let entry = parse_entry(&line, entry_format).map_err(|error| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -68,12 +58,23 @@ impl HashFile {
         Ok(())
     }
 
+    pub fn detect_format(path: &Path) -> io::Result<Option<HashFileFormat>> {
+        for line in BufReader::new(File::open(path)?).lines() {
+            let line = line?;
+            if !line.trim().is_empty() {
+                return Ok(Some(infer_format(&line)));
+            }
+        }
+        Ok(None)
+    }
+
     /// Build the replacement beside the destination; never truncate the original.
     pub fn save(
         &self,
         file_path: &Path,
         format: HashFileFormat,
         token: &CancellationToken,
+        overwrite: bool,
     ) -> io::Result<()> {
         let parent = file_path.parent().unwrap_or_else(|| Path::new("."));
         let mut temp = tempfile::NamedTempFile::new_in(parent)?;
@@ -102,16 +103,23 @@ impl HashFile {
             }
             writer.flush()?;
         }
-        match std::fs::metadata(file_path) {
-            Ok(metadata) => temp.as_file().set_permissions(metadata.permissions())?,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error),
+        if overwrite {
+            match std::fs::metadata(file_path) {
+                Ok(metadata) => temp.as_file().set_permissions(metadata.permissions())?,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
         }
         temp.as_file().sync_all()?;
         if token.is_cancelled() {
             return Err(io::Error::new(io::ErrorKind::Interrupted, "save canceled"));
         }
-        temp.persist(file_path).map_err(|error| error.error)?;
+        if overwrite {
+            temp.persist(file_path).map_err(|error| error.error)?;
+        } else {
+            temp.persist_noclobber(file_path)
+                .map_err(|error| error.error)?;
+        }
         Ok(())
     }
 
@@ -129,6 +137,18 @@ impl HashFile {
     }
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
+    }
+}
+
+fn infer_format(line: &str) -> HashFileFormat {
+    if line.split_once(' ').is_some_and(|(digest, _)| {
+        !digest.is_empty() && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }) {
+        HashFileFormat::HashSum
+    } else if line.contains('|') {
+        HashFileFormat::HashCheck
+    } else {
+        HashFileFormat::HashSum
     }
 }
 
@@ -200,7 +220,7 @@ mod tests {
         let token = CancellationToken::new();
         token.cancel();
         let error = manifest
-            .save(&path, HashFileFormat::HashCheck, &token)
+            .save(&path, HashFileFormat::HashCheck, &token, true)
             .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::Interrupted);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "original");
@@ -238,7 +258,12 @@ mod tests {
             digest: "digest".into(),
         });
         assert!(manifest
-            .save(&path, HashFileFormat::HashCheck, &CancellationToken::new())
+            .save(
+                &path,
+                HashFileFormat::HashCheck,
+                &CancellationToken::new(),
+                true
+            )
             .is_err());
         drop(lock);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "original");

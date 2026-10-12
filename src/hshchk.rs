@@ -1,172 +1,181 @@
-use clap::{command, Arg};
-use std::io::Error;
+use clap::{command, Arg, ArgAction, ArgMatches, Command};
+use hshchk::hash_file_process::{
+    HashFileProcessOptions, HashFileProcessType, HashFileProcessor, ProcessOutcome,
+};
+use hshchk::{get_hash_types, ui, HashFileFormat};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tokio_util::sync::CancellationToken;
 
-use hshchk::hash_file_process::{HashFileProcessOptions, HashFileProcessor, ProcessOutcome};
-use hshchk::{get_hash_types, ui};
+fn common_args(command: Command) -> Command {
+    command
+        .arg(Arg::new("directory").required(true).value_parser(clap::value_parser!(PathBuf)).help("Target directory; manifest entries are relative to this directory"))
+        .arg(Arg::new("type").short('t').long("type").visible_alias("algorithm").value_parser(get_hash_types()).ignore_case(true)
+            .help("Creation algorithm or discovery filter; required to read a custom manifest name"))
+        .arg(Arg::new("checksum-file").long("checksum-file").value_name("PATH").value_parser(clap::value_parser!(PathBuf))
+            .help("Select a manifest; relative paths resolve against the target directory"))
+        .arg(Arg::new("silent").short('s').long("silent").action(ArgAction::SetTrue).help("Suppress progress and stdout summaries; retain diagnostics"))
+        .arg(Arg::new("match").short('m').long("match").value_name("PATTERN").help("Select relative paths matching this regex"))
+        .arg(Arg::new("ignore").short('i').long("ignore").value_name("PATTERN").help("Exclude relative paths matching this regex"))
+        .arg(Arg::new("report-file").long("report-file").value_parser(clap::value_parser!(PathBuf)).value_name("PATH")
+            .help("Append diagnostics and a summary to a report; path is relative to the working directory"))
+        .arg(Arg::new("progress").long("progress").value_parser(["auto", "always", "never"]).default_value("auto")
+            .help("Live stderr progress; auto enables it only in a terminal"))
+}
 
-fn run() -> Result<ProcessOutcome, Box<dyn ::std::error::Error>> {
-    let matches = command!()
-        .arg(Arg::new("directory").required(true).help(
-            "Target directory. \
-         Either create a checksum file or verify files in specified directory. \
-         The presence or absence of a checksum file in target directory dictates \
-         the operating mode.",
-        ))
-        .arg(
-            Arg::new("type")
-                .short('t')
-                .long("type")
-                .value_parser(get_hash_types())
-                .ignore_case(true)
-                .default_value("SHA1")
-                .help("Hash type"),
-        )
-        .arg(
-            Arg::new("create")
-                .short('c')
-                .long("create")
-                .action(clap::ArgAction::SetTrue)
-                .conflicts_with("update")
-                .help("Force create mode and overwrite checksum file if it exists"),
-        )
+fn creation_args(command: Command) -> Command {
+    command
+        .arg(Arg::new("hc").short('u').long("hc").action(ArgAction::SetTrue).conflicts_with("format")
+            .help("Create the legacy format with recorded file sizes (alias for --format hashcheck)"))
+        .arg(Arg::new("format").long("format").value_parser(["sum", "hashcheck"])
+            .help("Creation format [default: sum]; reading detects format from contents"))
+}
+fn verification_args(command: Command) -> Command {
+    command
         .arg(
             Arg::new("size")
                 .short('f')
                 .long("size")
-                .action(clap::ArgAction::SetTrue)
-                .help("Check file size only"),
+                .action(ArgAction::SetTrue)
+                .help("Verify recorded sizes without hashing; requires a legacy manifest"),
         )
         .arg(
             Arg::new("extra")
                 .short('r')
                 .long("extra")
-                .action(clap::ArgAction::SetTrue)
-                .help("Report extra files"),
+                .action(ArgAction::SetTrue)
+                .help("Warn about files absent from the manifest"),
         )
-        .arg(
-            Arg::new("silent")
-                .short('s')
-                .long("silent")
-                .action(clap::ArgAction::SetTrue)
-                .help("Don't output to stdout"),
-        )
-        .arg(
-            Arg::new("match")
-                .short('m')
-                .long("match")
-                .value_name("pattern")
-                .help("Process files that match regex pattern"),
-        )
-        .arg(
-            Arg::new("ignore")
-                .short('i')
-                .long("ignore")
-                .value_name("pattern")
-                .help("Ignore files that match regex pattern"),
-        )
-        .arg(
-            Arg::new("hc")
-                .short('u')
-                .long("hc")
-                .action(clap::ArgAction::SetTrue)
-                .help("Use hshchk (e.g. hshchk.sha1) file format"),
-        )
-        .arg(
-            Arg::new("update")
-                .long("update")
-                .short('x')
-                .action(clap::ArgAction::SetTrue)
-                .help("Update an existing checksum file; rehash all selected files"),
-        )
-        .arg(
-            Arg::new("remove-missing")
-                .long("remove-missing")
-                .requires("update")
-                .action(clap::ArgAction::SetTrue)
-                .help("Remove missing entries when updating; preserve excluded entries"),
-        )
-        .arg(
-            Arg::new("dry-run")
-                .long("dry-run")
-                .requires("update")
-                .action(clap::ArgAction::SetTrue)
-                .help("Preview update counts without replacing the manifest"),
-        )
-        .arg(
-            Arg::new("report-file")
-                .long("report-file")
-                .value_parser(clap::value_parser!(PathBuf))
-                .value_name("PATH")
-                .help("Append diagnostics and a summary to a report file"),
-        )
-        .arg(
-            Arg::new("progress")
-                .long("progress")
-                .value_parser(["auto", "always", "never"])
-                .default_value("auto")
-                .help("Live progress on stderr; auto enables it only in a terminal"),
-        )
-        .try_get_matches()?;
+}
+fn update_args(command: Command, legacy: bool) -> Command {
+    let remove = Arg::new("remove-missing")
+        .long("remove-missing")
+        .action(ArgAction::SetTrue)
+        .help("Remove selected missing entries; preserve excluded entries");
+    let dry_run = Arg::new("dry-run")
+        .long("dry-run")
+        .action(ArgAction::SetTrue)
+        .help("Preview update counts without replacing the manifest");
+    command
+        .arg(if legacy {
+            remove.requires("update")
+        } else {
+            remove
+        })
+        .arg(if legacy {
+            dry_run.requires("update")
+        } else {
+            dry_run
+        })
+}
+fn cli() -> Command {
+    let root = creation_args(verification_args(update_args(
+        common_args(command!()),
+        true,
+    )))
+    .arg(
+        Arg::new("create")
+            .short('c')
+            .long("create")
+            .action(ArgAction::SetTrue)
+            .conflicts_with_all(["update", "size", "extra"])
+            .help("Legacy shortcut: force creation and authorize overwriting the manifest"),
+    )
+    .arg(
+        Arg::new("update")
+            .short('x')
+            .long("update")
+            .action(ArgAction::SetTrue)
+            .conflicts_with_all(["size", "extra", "format", "hc"])
+            .help("Legacy shortcut: update an existing manifest by rehashing selected files"),
+    );
+    root.subcommand_negates_reqs(true).args_conflicts_with_subcommands(true).propagate_version(true)
+        .after_help("Examples:\n  hshchk create files --type SHA256\n  hshchk verify files --checksum-file SHA256SUMS\n  hshchk update files --dry-run --remove-missing\n  hshchk files  # compatibility shortcut: verify if a manifest exists, otherwise create")
+        .subcommand(creation_args(common_args(Command::new("create").about("Create a checksum manifest; refuse replacement unless --overwrite is supplied")))
+            .arg(Arg::new("overwrite").long("overwrite").action(ArgAction::SetTrue).help("Authorize replacing the selected manifest")))
+        .subcommand(verification_args(common_args(Command::new("verify").about("Verify an existing checksum manifest"))))
+        .subcommand(update_args(common_args(Command::new("update").about("Update an existing checksum manifest by rehashing selected files")), false))
+}
 
-    let directory = matches.get_one::<String>("directory").unwrap();
-    let target_path = PathBuf::from(&directory);
-    if !target_path.is_dir() {
-        return Err(Box::new(Error::other(
-            "The specified directory doesn't exist.",
-        )));
-    }
+fn flag(matches: &ArgMatches, name: &str) -> bool {
+    matches
+        .try_get_one::<bool>(name)
+        .ok()
+        .flatten()
+        .copied()
+        .unwrap_or(false)
+}
+fn value<'a>(matches: &'a ArgMatches, name: &str) -> Option<&'a str> {
+    matches
+        .try_get_one::<String>(name)
+        .ok()
+        .flatten()
+        .map(String::as_str)
+}
 
-    let hash_file_format = hshchk::get_hash_file_format_from_arg(matches.get_flag("hc"));
-    let hash_type =
-        hshchk::get_hash_type_from_str(&matches.get_one::<String>("type").unwrap().to_uppercase());
-
-    let main_cancellation_token = CancellationToken::new();
-    let cancellation_token = main_cancellation_token.clone();
-
-    ctrlc::set_handler(move || {
-        cancellation_token.cancel();
-    })?;
-
+fn run() -> Result<ProcessOutcome, Box<dyn std::error::Error>> {
+    let matches = cli().try_get_matches()?;
+    let (process_type, matches, explicit_command) = match matches.subcommand() {
+        Some(("create", args)) => (Some(HashFileProcessType::Create), args, true),
+        Some(("verify", args)) => (Some(HashFileProcessType::Verify), args, true),
+        Some(("update", args)) => (Some(HashFileProcessType::Update), args, true),
+        _ => (None, &matches, false),
+    };
+    let hash_file_format = if flag(matches, "hc") || value(matches, "format") == Some("hashcheck") {
+        HashFileFormat::HashCheck
+    } else {
+        HashFileFormat::HashSum
+    };
+    let token = CancellationToken::new();
+    let cancellation = token.clone();
+    ctrlc::set_handler(move || cancellation.cancel())?;
     let processor = HashFileProcessor::try_new(HashFileProcessOptions {
-        base_path: target_path,
+        base_path: matches.get_one::<PathBuf>("directory").unwrap().clone(),
         hash_file_format: Some(hash_file_format),
-        hash_type: Some(hash_type),
-        force_create: Some(matches.get_flag("create")),
-        report_extra: Some(matches.get_flag("extra")),
-        size_only: Some(matches.get_flag("size")),
-        match_pattern: matches.get_one::<String>("match").map(String::as_str),
-        ignore_pattern: matches.get_one::<String>("ignore").map(String::as_str),
-        update_mode: matches.get_flag("update"),
-        remove_missing_in_update: matches.get_flag("remove-missing"),
-        dry_run: matches.get_flag("dry-run"),
+        hash_type: value(matches, "type").map(hshchk::get_hash_type_from_str),
+        force_create: Some(!explicit_command && flag(matches, "create")),
+        report_extra: Some(flag(matches, "extra")),
+        size_only: Some(flag(matches, "size")),
+        match_pattern: value(matches, "match"),
+        ignore_pattern: value(matches, "ignore"),
+        update_mode: !explicit_command && flag(matches, "update"),
+        remove_missing_in_update: flag(matches, "remove-missing"),
+        dry_run: flag(matches, "dry-run"),
+        process_type,
+        checksum_file: matches.get_one::<PathBuf>("checksum-file").cloned(),
+        overwrite: flag(matches, "overwrite"),
     })?;
-
-    let progress = match matches.get_one::<String>("progress").unwrap().as_str() {
-        "always" => Some(true),
-        "never" => Some(false),
+    let progress = match value(matches, "progress") {
+        Some("always") => Some(true),
+        Some("never") => Some(false),
         _ => None,
     };
-    let ui = ui::UI::new(processor, matches.get_flag("silent"))
+    Ok(ui::UI::new(processor, flag(matches, "silent"))
         .with_report_file(matches.get_one::<PathBuf>("report-file").cloned())
-        .with_progress(progress);
-
-    Ok(ui.run_outcome(main_cancellation_token))
+        .with_progress(progress)
+        .run_outcome(token))
 }
 
 fn main() -> ExitCode {
     match run() {
         Ok(outcome) => ExitCode::from(outcome.status.exit_code()),
         Err(error) => {
-            if let Some(clap_error) = error.downcast_ref::<clap::Error>() {
-                let _ = clap_error.print();
-                ExitCode::from(clap_error.exit_code() as u8)
+            if let Some(error) = error.downcast_ref::<clap::Error>() {
+                let _ = error.print();
+                ExitCode::from(error.exit_code() as u8)
             } else {
                 eprintln!("{}", error);
                 ExitCode::from(2)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn cli_argument_relationships_are_consistent() {
+        cli().debug_assert();
     }
 }

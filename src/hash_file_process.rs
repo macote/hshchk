@@ -167,6 +167,12 @@ pub struct HashFileProcessOptions<'a> {
     pub update_mode: bool,
     pub remove_missing_in_update: bool,
     pub dry_run: bool,
+    /// Explicit operation; None keeps directory-based auto mode.
+    pub process_type: Option<HashFileProcessType>,
+    /// Relative paths resolve against base_path, not the working directory.
+    pub checksum_file: Option<PathBuf>,
+    /// Authorize replacement in explicit Create mode. Legacy force_create also authorizes it.
+    pub overwrite: bool,
 }
 
 pub struct HashFileProcessor {
@@ -175,6 +181,7 @@ pub struct HashFileProcessor {
     hash_file_format: HashFileFormat,
     process_type: HashFileProcessType,
     hash_file_path: PathBuf,
+    overwrite_manifest: bool,
     base_path: PathBuf,
     size_only: bool,
     report_extra: bool,
@@ -203,55 +210,133 @@ impl HashFileProcessor {
         Self::try_new(options).expect("invalid processing options")
     }
     pub fn try_new(options: HashFileProcessOptions) -> io::Result<Self> {
-        if options.update_mode && options.force_create.unwrap_or_default() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "create and update are mutually exclusive",
-            ));
+        let legacy_mode = if options.force_create.unwrap_or_default() {
+            Some(HashFileProcessType::Create)
+        } else if options.update_mode {
+            Some(HashFileProcessType::Update)
+        } else {
+            None
+        };
+        if (options.update_mode && options.force_create.unwrap_or_default())
+            || options
+                .process_type
+                .zip(legacy_mode)
+                .is_some_and(|(explicit, legacy)| explicit != legacy)
+        {
+            return Err(invalid_options("conflicting operation modes"));
         }
-        if (options.remove_missing_in_update || options.dry_run) && !options.update_mode {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "removal and dry-run require update mode",
-            ));
+        let requested_mode = options.process_type.or(legacy_mode);
+        if (options.remove_missing_in_update || options.dry_run)
+            && requested_mode != Some(HashFileProcessType::Update)
+        {
+            return Err(invalid_options("removal and dry-run require update mode"));
+        }
+        if options.overwrite && requested_mode != Some(HashFileProcessType::Create) {
+            return Err(invalid_options("overwrite requires create mode"));
         }
         let base_path = fs::canonicalize(&options.base_path)?;
         if !base_path.is_dir() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "target is not a directory",
-            ));
+            return Err(invalid_options("target is not a directory"));
         }
+        let overwrite = options.overwrite || options.force_create.unwrap_or_default();
         let mut hash_type = options.hash_type.unwrap_or(HashType::SHA1);
         let mut hash_file_format = options
             .hash_file_format
             .unwrap_or(HashFileFormat::HashCheck);
-        let mut process_type = HashFileProcessType::Create;
-        if !options.force_create.unwrap_or_default() {
-            if let Some((existing_type, format)) =
-                get_existing_file_hash_type(&base_path, hash_type)
+        let mut selected_path = None;
+        let mut exists = false;
+
+        if let Some(path) = &options.checksum_file {
+            let known = checksum_name_hint(path);
+            let path = resolve_checksum_path(&base_path, path)?;
+            let metadata = match fs::metadata(&path) {
+                Ok(metadata) => Some(metadata),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+                Err(error) => return Err(error),
+            };
+            if metadata
+                .as_ref()
+                .is_some_and(|metadata| !metadata.is_file())
             {
-                hash_type = existing_type;
-                hash_file_format = format;
-                process_type = if options.update_mode {
-                    HashFileProcessType::Update
-                } else {
-                    HashFileProcessType::Verify
-                };
-            } else if options.update_mode {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "no checksum file found to update",
+                return Err(invalid_options("checksum path is not a regular file"));
+            }
+            exists = metadata.is_some();
+            if let Some((known_type, _)) = known {
+                if options
+                    .hash_type
+                    .is_some_and(|requested| requested != known_type)
+                {
+                    return Err(invalid_options(
+                        "selected algorithm conflicts with checksum filename",
+                    ));
+                }
+                hash_type = known_type;
+            } else if exists
+                && requested_mode != Some(HashFileProcessType::Create)
+                && options.hash_type.is_none()
+            {
+                return Err(invalid_options(
+                    "custom checksum filename requires an explicit algorithm (--type)",
                 ));
             }
+            if exists && requested_mode != Some(HashFileProcessType::Create) {
+                hash_file_format = HashFile::detect_format(&path)?
+                    .or(known.map(|(_, format)| format))
+                    .unwrap_or(HashFileFormat::HashSum);
+            }
+            selected_path = Some(path);
+        } else if requested_mode != Some(HashFileProcessType::Create) {
+            let mut candidates = discover_checksum_files(&base_path, options.hash_type)?;
+            if candidates.len() > 1 {
+                candidates.sort_by(|left, right| left.0.cmp(&right.0));
+                let names = candidates
+                    .iter()
+                    .map(|(path, _, _)| path.file_name().unwrap().to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(invalid_options(&format!("multiple checksum files found: {}. Select one with --checksum-file (or restrict discovery with --type)", names)));
+            }
+            if let Some((path, algorithm, format)) = candidates.pop() {
+                exists = true;
+                hash_type = algorithm;
+                hash_file_format = HashFile::detect_format(&path)?.unwrap_or(format);
+                selected_path = Some(path);
+            }
+        }
+        let process_type = requested_mode.unwrap_or(if exists {
+            HashFileProcessType::Verify
+        } else {
+            HashFileProcessType::Create
+        });
+        if process_type != HashFileProcessType::Create && !exists {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no checksum file found for the requested operation",
+            ));
+        }
+        let hash_file_path = selected_path.unwrap_or_else(|| {
+            base_path.join(match hash_file_format {
+                HashFileFormat::HashCheck => get_hashcheck_file_name(hash_type),
+                HashFileFormat::HashSum => get_hashsum_file_name(hash_type),
+            })
+        });
+        if process_type == HashFileProcessType::Create && !overwrite && hash_file_path.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "checksum file already exists; use --overwrite to replace it",
+            ));
         }
         if options.size_only.unwrap_or_default()
             && (process_type != HashFileProcessType::Verify
                 || hash_file_format != HashFileFormat::HashCheck)
         {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
+            return Err(invalid_options(
                 "size-only verification requires a manifest with recorded sizes",
+            ));
+        }
+        if options.report_extra.unwrap_or_default() && process_type != HashFileProcessType::Verify {
+            return Err(invalid_options(
+                "reporting extra files requires verify mode",
             ));
         }
         let compile = |pattern: Option<&str>| -> io::Result<Option<Regex>> {
@@ -260,10 +345,6 @@ impl HashFileProcessor {
                 .transpose()
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))
         };
-        let hash_file_path = base_path.join(match hash_file_format {
-            HashFileFormat::HashCheck => get_hashcheck_file_name(hash_type),
-            HashFileFormat::HashSum => get_hashsum_file_name(hash_type),
-        });
         let mut excluded_paths = HashSet::new();
         excluded_paths.insert(hash_file_path.clone());
         if let Ok(binary) = std::env::current_exe().and_then(fs::canonicalize) {
@@ -275,6 +356,7 @@ impl HashFileProcessor {
             hash_file_format,
             process_type,
             hash_file_path,
+            overwrite_manifest: process_type != HashFileProcessType::Create || overwrite,
             base_path,
             size_only: options.size_only.unwrap_or_default(),
             report_extra: options.report_extra.unwrap_or_default(),
@@ -300,6 +382,15 @@ impl HashFileProcessor {
     }
     pub fn get_process_type(&self) -> HashFileProcessType {
         self.process_type
+    }
+    pub fn checksum_file_path(&self) -> &Path {
+        &self.hash_file_path
+    }
+    pub fn hash_type(&self) -> HashType {
+        self.hash_type
+    }
+    pub fn hash_file_format(&self) -> HashFileFormat {
+        self.hash_file_format
     }
     pub fn stats(&self) -> &ProcessStats {
         &self.process_stats
@@ -595,6 +686,7 @@ impl HashFileProcessor {
                 &self.hash_file_path,
                 self.hash_file_format,
                 &cancellation_token,
+                self.overwrite_manifest,
             ) {
                 if cancellation_token.is_cancelled() {
                     return HashFileProcessResult::Canceled;
@@ -780,22 +872,66 @@ fn get_hashsum_file_name(hash_type: HashType) -> PathBuf {
     let name: &str = hash_type.into();
     PathBuf::from(format!("{}SUMS", name.to_uppercase()))
 }
-fn get_existing_file_hash_type(
-    base: &Path,
-    desired: HashType,
-) -> Option<(HashType, HashFileFormat)> {
-    std::iter::once(desired)
-        .chain(HashType::iter().filter(|hash| *hash != desired))
-        .find_map(|hash| {
-            if base.join(get_hashcheck_file_name(hash)).is_file() {
-                Some((hash, HashFileFormat::HashCheck))
-            } else if base.join(get_hashsum_file_name(hash)).is_file() {
-                Some((hash, HashFileFormat::HashSum))
-            } else {
-                None
-            }
-        })
+fn invalid_options(message: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidInput, message)
 }
+
+fn checksum_name_hint(path: &Path) -> Option<(HashType, HashFileFormat)> {
+    let name = path.file_name()?.to_str()?;
+    HashType::iter().find_map(|algorithm| {
+        let algorithm_name: &str = algorithm.into();
+        if name.eq_ignore_ascii_case(&format!("hshchk.{}", algorithm_name)) {
+            Some((algorithm, HashFileFormat::HashCheck))
+        } else if name.eq_ignore_ascii_case(&format!("{}SUM", algorithm_name))
+            || name.eq_ignore_ascii_case(&format!("{}SUMS", algorithm_name))
+        {
+            Some((algorithm, HashFileFormat::HashSum))
+        } else {
+            None
+        }
+    })
+}
+
+fn discover_checksum_files(
+    base: &Path,
+    selected_type: Option<HashType>,
+) -> io::Result<Vec<(PathBuf, HashType, HashFileFormat)>> {
+    let mut candidates = Vec::new();
+    for entry in fs::read_dir(base)? {
+        let path = entry?.path();
+        if let Some((algorithm, format)) = checksum_name_hint(&path) {
+            if selected_type.is_none_or(|selected| selected == algorithm)
+                && fs::metadata(&path)?.is_file()
+            {
+                candidates.push((fs::canonicalize(path)?, algorithm, format));
+            }
+        }
+    }
+    Ok(candidates)
+}
+
+fn resolve_checksum_path(base: &Path, path: &Path) -> io::Result<PathBuf> {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        base.join(path)
+    };
+    match fs::canonicalize(&path) {
+        Ok(path) => Ok(path),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            let parent = fs::canonicalize(
+                path.parent()
+                    .ok_or_else(|| invalid_options("checksum path has no parent"))?,
+            )?;
+            Ok(parent.join(
+                path.file_name()
+                    .ok_or_else(|| invalid_options("checksum path has no filename"))?,
+            ))
+        }
+        Err(error) => Err(error),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -846,5 +982,28 @@ mod tests {
         assert_eq!(outcome.stats.files_processed, 1);
         assert!(!outcome.manifest_written);
         assert!(!root.path().join("hshchk.sha1").exists());
+    }
+
+    #[test]
+    fn create_does_not_replace_a_manifest_that_appears_after_setup() {
+        let root = tempfile::tempdir().unwrap();
+        fs::write(root.path().join("file"), "data").unwrap();
+        let manifest = root.path().join("hshchk.sha1");
+        let late_manifest = manifest.clone();
+        let mut processor = HashFileProcessor::try_new(HashFileProcessOptions {
+            base_path: root.path().into(),
+            process_type: Some(HashFileProcessType::Create),
+            ..Default::default()
+        })
+        .unwrap();
+        processor.set_before_save(move || fs::write(&late_manifest, "created by another writer"));
+        let outcome = processor.process_outcome();
+        assert_eq!(outcome.status, ProcessStatus::Error);
+        assert!(!outcome.manifest_written);
+        assert_eq!(
+            fs::read_to_string(&manifest).unwrap(),
+            "created by another writer"
+        );
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 2);
     }
 }
