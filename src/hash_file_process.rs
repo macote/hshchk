@@ -2,14 +2,13 @@ use crate::block_hasher::HashProgress;
 use crate::file_tree::{FileTree, FileTreeProcessor};
 use crate::hash_file::{HashFile, HashFileEntry};
 use crate::{HashFileFormat, HashType};
-use cancellation::{CancellationToken, CancellationTokenSource};
 use crossbeam::channel::{select, unbounded, Sender};
 use regex::Regex;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use strum::IntoEnumIterator;
+use tokio_util::sync::CancellationToken;
 
 static HASHCHECK_BASE_FILE_NAME: &str = "hshchk";
 static HASHSUM_SUFFIX: &str = "SUMS";
@@ -79,7 +78,7 @@ pub struct HashFileProcessor {
     error_occurred: bool,
     files_processed: bool,
     bytes_processed_notification_block_size: usize,
-    cancellation_token: Option<Arc<CancellationToken>>,
+    cancellation_token: Option<CancellationToken>,
     internal_hash_progress_sender: Option<Sender<HashProgress>>,
     internal_progress_sender: Option<Sender<FileProgress>>,
     progress_event: Option<Sender<FileProgress>>,
@@ -171,13 +170,12 @@ impl HashFileProcessor {
         self.process_type
     }
     pub fn process(&mut self) -> HashFileProcessResult {
-        let cts = CancellationTokenSource::new();
-        let cancellation_token = cts.token();
-        self.process_with_cancellation_token(cancellation_token.clone())
+        let cancellation_token = CancellationToken::new();
+        self.process_with_cancellation_token(cancellation_token)
     }
     pub fn process_with_cancellation_token(
         &mut self,
-        cancellation_token: Arc<CancellationToken>,
+        cancellation_token: CancellationToken,
     ) -> HashFileProcessResult {
         let result = self.process_internal(cancellation_token);
         if let Some(sender) = &self.complete_event {
@@ -208,10 +206,7 @@ impl HashFileProcessor {
                 .unwrap();
         }
     }
-    fn process_internal(
-        &mut self,
-        cancellation_token: Arc<CancellationToken>,
-    ) -> HashFileProcessResult {
+    fn process_internal(&mut self, cancellation_token: CancellationToken) -> HashFileProcessResult {
         self.cancellation_token = Some(cancellation_token.clone());
 
         if self.process_type == HashFileProcessType::Verify {
@@ -274,7 +269,7 @@ impl HashFileProcessor {
             thread_handle.join().unwrap();
         }
 
-        if cancellation_token.is_canceled() {
+        if cancellation_token.is_cancelled() {
             return HashFileProcessResult::Canceled;
         }
 
@@ -347,9 +342,8 @@ impl FileTreeProcessor for HashFileProcessor {
 
         let relative_file_path = file_path.strip_prefix(&self.base_path).unwrap();
         let relative_file_path_str = relative_file_path.to_str().unwrap();
-        let file_size: u64;
-        match file_path.metadata() {
-            Ok(metadata) => file_size = metadata.len(),
+        let file_size = match file_path.metadata() {
+            Ok(metadata) => metadata.len(),
             Err(error) => {
                 self.handle_error(
                     relative_file_path,
@@ -357,7 +351,7 @@ impl FileTreeProcessor for HashFileProcessor {
                 );
                 return;
             }
-        }
+        };
 
         let hash_file_entry = self.hash_file.get_entry(relative_file_path_str);
         if let Some(file_entry) = hash_file_entry {
@@ -407,7 +401,7 @@ impl FileTreeProcessor for HashFileProcessor {
                     .unwrap();
             }
 
-            if cancellation_token.is_canceled() {
+            if cancellation_token.is_cancelled() {
                 return;
             }
         }
@@ -416,7 +410,6 @@ impl FileTreeProcessor for HashFileProcessor {
             self.hash_file.add_entry(HashFileEntry {
                 file_path: relative_file_path_str.to_string(),
                 size: Some(file_size),
-                binary: true,
                 digest,
             });
         } else if self.process_type == HashFileProcessType::Verify {
@@ -469,15 +462,15 @@ fn get_existing_file_hash_type(
 
     if let Some(hash_file_format) = hash_file_exists(&mut hash_file_path, desired_hash_type) {
         return Some((desired_hash_type, hash_file_format));
-    } else {
-        hash_file_path.pop();
-        for hash_type in HashType::iter() {
-            if let Some(hash_file_format) = hash_file_exists(&mut hash_file_path, hash_type) {
-                return Some((hash_type, hash_file_format));
-            }
+    }
 
-            hash_file_path.pop();
+    hash_file_path.pop();
+    for hash_type in HashType::iter() {
+        if let Some(hash_file_format) = hash_file_exists(&mut hash_file_path, hash_type) {
+            return Some((hash_type, hash_file_format));
         }
+
+        hash_file_path.pop();
     }
 
     None

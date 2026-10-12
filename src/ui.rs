@@ -1,6 +1,5 @@
-use cancellation::CancellationToken;
 use crossbeam::channel::{select, unbounded};
-use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 use crate::hash_file_process::{
     FileProgress, HashFileProcessResult, HashFileProcessType, HashFileProcessor,
@@ -18,7 +17,7 @@ impl UI {
     }
     pub fn run(
         mut self,
-        cancellation_token: Arc<CancellationToken>,
+        cancellation_token: CancellationToken,
         process_type: HashFileProcessType,
     ) -> HashFileProcessResult {
         let silent = self.silent;
@@ -48,13 +47,16 @@ impl UI {
                 ..Default::default()
             };
 
-            output.write_init();
+            if !silent {
+                output.write_init();
+            }
+
             while !senders_dropped {
                 select! {
                     recv(progress_receiver) -> msg => {
                         if let Ok(args) = msg {
                             if args.bytes_processed == 0 {
-                                if file_progress.file_path != "" && !skip_processed {
+                                if !file_progress.file_path.is_empty() && !skip_processed {
                                     output.write_processed(&file_progress.file_path);
                                 }
 

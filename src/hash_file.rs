@@ -15,7 +15,6 @@ const MAX_HASH_SIZE: usize = 1024;
 pub struct HashFileEntry {
     pub file_path: String,
     pub size: Option<u64>,
-    pub binary: bool,
     pub digest: String,
 }
 
@@ -41,7 +40,7 @@ impl HashFile {
             _ => parse_hash_sum_entry,
         };
 
-        for (_, line) in reader.lines().enumerate() {
+        for line in reader.lines() {
             let content = line.unwrap().replace(file_separator, os_separator);
             if let Some(file_entry) = entry_parse(&content) {
                 self.add_entry(file_entry);
@@ -50,7 +49,7 @@ impl HashFile {
     }
 
     pub fn save(&self, file_path: &Path, hash_file_format: HashFileFormat) {
-        let file = create_file(&file_path);
+        let file = create_file(file_path);
         let mut writer = BufWriter::new(&file);
         let entry_format = match hash_file_format {
             HashFileFormat::HashCheck => format_hash_check_entry,
@@ -77,7 +76,7 @@ impl HashFile {
     }
 
     pub fn get_file_paths(&self) -> Vec<String> {
-        self.files.iter().map(|(key, _)| key.clone()).collect()
+        self.files.keys().cloned().collect()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -117,7 +116,6 @@ fn parse_hash_check_entry(line: &str) -> Option<HashFileEntry> {
         Some(HashFileEntry {
             file_path: parts[0].to_string(),
             size: Some(size),
-            binary: true,
             digest: parts[2].to_lowercase(),
         })
     } else {
@@ -130,7 +128,6 @@ fn parse_hash_sum_entry(line: &str) -> Option<HashFileEntry> {
         Some(space_position) => {
             let digest = &line[..space_position];
             let file_path = &line[space_position + 2..];
-            let binary = line.as_bytes()[space_position + 1] as char == '*';
             if file_path.len() > MAX_PATH_SIZE {
                 panic!(
                     "File path length must be less than {} characters.",
@@ -141,7 +138,6 @@ fn parse_hash_sum_entry(line: &str) -> Option<HashFileEntry> {
             Some(HashFileEntry {
                 file_path: file_path.to_string(),
                 size: None,
-                binary,
                 digest: digest.to_lowercase(),
             })
         }
@@ -152,12 +148,12 @@ fn parse_hash_sum_entry(line: &str) -> Option<HashFileEntry> {
 fn format_hash_check_entry(entry: &HashFileEntry) -> String {
     format!(
         "{}|{}|{}\n",
-        &entry.file_path,
-        &entry.size.unwrap().to_string(),
-        &entry.digest
+        entry.file_path,
+        entry.size.unwrap(),
+        entry.digest
     )
 }
 
 fn format_hash_sum_entry(entry: &HashFileEntry) -> String {
-    format!("{} *{}\n", &entry.digest, &entry.file_path)
+    format!("{} *{}\n", entry.digest, entry.file_path)
 }

@@ -1,12 +1,11 @@
 use num_format::{Locale, ToFormattedString};
 use std::io::{stdout, Write};
-use std::iter::repeat;
 use std::time::Instant;
+use terminal_size::terminal_size;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::hash_file_process::{FileProcessEntry, FileProgress};
 use crate::speed::get_speed;
-use crate::tty::terminal_size;
 
 const OUTPUT_REFRESH_IN_MILLIS: u32 = 233;
 
@@ -34,8 +33,8 @@ impl Output {
         let line_len = line.graphemes(true).count();
         if line_len < self.output_width {
             let gap = self.output_width - line_len;
-            let pad = &repeat(" ").take(gap).collect::<String>();
-            padded_line = line + pad;
+            let pad = " ".repeat(gap);
+            padded_line = line + &pad;
         }
 
         padded_line
@@ -59,42 +58,41 @@ impl Output {
             let mut info_output = String::new();
             if error {
                 info_output = format!(" => {}", info);
-            } else if self.last_output_file_progress.file_path == file_path {
-                if bytes_processed != self.last_output_file_progress.bytes_processed {
-                    let percent = match file_size {
-                        0 => 100,
-                        _ => bytes_processed * 100 / file_size,
-                    };
-                    let speed = get_speed(
-                        bytes_processed,
-                        self.last_output_file_progress.bytes_processed,
-                        ellapsed_millis,
-                    );
+            } else if self.last_output_file_progress.file_path == file_path
+                && bytes_processed != self.last_output_file_progress.bytes_processed
+            {
+                let percent = match file_size {
+                    0 => 100,
+                    _ => bytes_processed * 100 / file_size,
+                };
+                let speed = get_speed(
+                    bytes_processed,
+                    self.last_output_file_progress.bytes_processed,
+                    ellapsed_millis,
+                );
 
-                    info_output = format!(
-                        " ({}; {} %; {} {})",
-                        file_size.to_formatted_string(&Locale::en),
-                        percent.to_formatted_string(&Locale::en),
-                        speed.bytes_per_interval.to_formatted_string(&Locale::en),
-                        speed.unit
-                    );
-                }
+                info_output = format!(
+                    " ({}; {} %; {} {})",
+                    file_size.to_formatted_string(&Locale::en),
+                    percent.to_formatted_string(&Locale::en),
+                    speed.bytes_per_interval.to_formatted_string(&Locale::en),
+                    speed.unit
+                );
             }
 
-            let printed_file_path: String;
             let file_path_max_size = self.output_width - info_output.len();
             let mut file_path_graphemes = file_path.graphemes(true);
             let file_path_len = file_path_graphemes.clone().count();
-            if file_path_max_size < file_path_len {
+            let printed_file_path = if file_path_max_size < file_path_len {
                 let offset = file_path_len - file_path_max_size + "..".len();
                 for _ in 0..offset {
                     file_path_graphemes.next();
                 }
 
-                printed_file_path = format!("{}{}", "..", file_path_graphemes.as_str());
+                format!("{}{}", "..", file_path_graphemes.as_str())
             } else {
-                printed_file_path = file_path.to_owned();
-            }
+                file_path.to_owned()
+            };
 
             let line_output = self.pad_line(format!("{}{}", printed_file_path, info_output));
             if error {
