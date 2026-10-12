@@ -3,6 +3,7 @@ use crate::hash_file_process::{
 };
 use crate::output::Output;
 use crossbeam::channel::{never, select, unbounded};
+use std::io::Write;
 use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 
@@ -53,7 +54,12 @@ impl UI {
         // Validate before opening: the report must never append to the manifest.
         if let Some(path) = &self.report_file {
             if let Err(error) = self.processor.exclude_output_file(path) {
-                eprintln!("Cannot use report '{}': {}", path.display(), error);
+                let _ = writeln!(
+                    std::io::stderr(),
+                    "Cannot use report '{}': {}",
+                    path.display(),
+                    error
+                );
                 return ProcessOutcome::setup_error(
                     mode,
                     dry_run,
@@ -70,7 +76,7 @@ impl UI {
         ) {
             Ok(output) => output,
             Err(error) => {
-                eprintln!("Cannot open report: {}", error);
+                let _ = writeln!(std::io::stderr(), "Cannot open report: {}", error);
                 return ProcessOutcome::setup_error(
                     mode,
                     dry_run,
@@ -138,7 +144,7 @@ impl UI {
         match renderer.join() {
             Ok(Ok(mut output)) => {
                 if let Err(error) = output.write_result(&outcome) {
-                    eprintln!("Cannot write output: {}", error);
+                    let _ = writeln!(std::io::stderr(), "Cannot write output: {}", error);
                     outcome.record_output_error(
                         self.report_file.clone().unwrap_or_default(),
                         format!("cannot write final output: {}", error),
@@ -146,14 +152,14 @@ impl UI {
                 }
             }
             Ok(Err(error)) => {
-                eprintln!("Cannot write output: {}", error);
+                let _ = writeln!(std::io::stderr(), "Cannot write output: {}", error);
                 outcome.record_output_error(
                     self.report_file.clone().unwrap_or_default(),
                     format!("cannot write output: {}", error),
                 );
             }
             Err(_) => {
-                eprintln!("Output worker failed");
+                let _ = writeln!(std::io::stderr(), "Output worker failed");
                 outcome.record_output_error(
                     self.report_file.clone().unwrap_or_default(),
                     "output worker failed".into(),

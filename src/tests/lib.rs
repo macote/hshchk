@@ -5,6 +5,18 @@ use hash_file::HashFileEntry;
 use std::fs;
 use tokio_util::sync::CancellationToken;
 
+#[test]
+fn legacy_format_argument_keeps_both_compatibility_defaults() {
+    assert_eq!(
+        get_hash_file_format_from_arg(true),
+        HashFileFormat::HashCheck
+    );
+    assert_eq!(
+        get_hash_file_format_from_arg(false),
+        HashFileFormat::HashSum
+    );
+}
+
 // block hasher
 
 // ...

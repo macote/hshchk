@@ -201,6 +201,44 @@ class CliWorkflows(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("--output", result.stdout.splitlines())
 
+    def test_read_only_stdout_reports_errors_without_losing_saved_manifest(self):
+        (self.root / "file").write_bytes(b"data")
+        output = self.work / "read-only-output"
+        output.write_bytes(b"preserve output")
+        for output_mode in ["json", "text"]:
+            with self.subTest(output_mode=output_mode), output.open("rb") as stream:
+                child = subprocess.run([str(BINARY), "create", str(self.root), "--overwrite", "--output", output_mode],
+                                       stdout=stream, stderr=subprocess.PIPE, timeout=30)
+                self.assertEqual(child.returncode, 2, child.stderr)
+                self.assertIn(b"Cannot write", child.stderr)
+            self.assertEqual(output.read_bytes(), b"preserve output")
+            self.command("verify")
+        with output.open("rb") as stream:
+            child = subprocess.run([str(BINARY), "completions", "bash"], stdout=stream,
+                                   stderr=subprocess.PIPE, timeout=30)
+        self.assertEqual(child.returncode, 2, child.stderr)
+        self.assertIn(b"Cannot write completions", child.stderr)
+        self.assertEqual(output.read_bytes(), b"preserve output")
+
+    def test_unwritable_progress_stream_preserves_manifest_and_returns_json_error(self):
+        file = self.root / "file"
+        file.write_bytes(b"data")
+        self.command("create")
+        manifest = self.root / "SHA1SUMS"
+        before = manifest.read_bytes()
+        file.write_bytes(b"")
+        error_stream = self.work / "read-only-error-output"
+        error_stream.write_bytes(b"preserve error output")
+        with error_stream.open("rb") as stream:
+            child = subprocess.run([str(BINARY), "update", str(self.root), "--output", "json", "--progress", "always"],
+                                   stdout=subprocess.PIPE, stderr=stream, timeout=30)
+        self.assertEqual(child.returncode, 2)
+        value = json.loads(child.stdout)
+        self.assertEqual(value["status"], "error")
+        self.assertFalse(value["manifest_written"])
+        self.assertEqual(manifest.read_bytes(), before)
+        self.assertEqual(error_stream.read_bytes(), b"preserve error output")
+
     @unittest.skipIf(os.name == "nt", "Unix link/filename semantics")
     def test_file_symlinks_broken_links_and_directory_cycles(self):
         source = self.work / "source"
@@ -218,6 +256,25 @@ class CliWorkflows(unittest.TestCase):
         (self.root / "cycle").symlink_to(self.root, target_is_directory=True)
         self.command("update", code=2)
         self.assertEqual(manifest.read_bytes(), before)
+
+    @unittest.skipUnless(os.name == "nt", "Windows NTFS junction semantics")
+    def test_directory_junctions_are_rejected_without_replacing_manifest(self):
+        (self.root / "file").write_bytes(b"data")
+        self.command("create")
+        manifest = self.root / "SHA1SUMS"
+        before = manifest.read_bytes()
+        junction = self.root / "cycle"
+        result = subprocess.run(["cmd.exe", "/d", "/c", "mklink", "/J", str(junction), str(self.root)],
+                                capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        try:
+            failed = self.command("update", code=2)
+            self.assertTrue(any("directory symlinks are not followed" in row["message"]
+                                for row in failed["diagnostics"]))
+            self.assertEqual(manifest.read_bytes(), before)
+        finally:
+            # Remove only this junction, never recursively remove its target.
+            os.rmdir(junction)
 
     @unittest.skipIf(os.name == "nt", "Unix representability and permission semantics")
     def test_unsupported_names_and_unwritable_destination_preserve_manifest(self):

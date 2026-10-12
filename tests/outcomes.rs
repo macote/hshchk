@@ -5,6 +5,29 @@ use std::path::Path;
 use tempfile::TempDir;
 use tokio_util::sync::CancellationToken;
 
+#[test]
+fn legacy_ui_run_returns_compatible_success_and_error_results() {
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("file"), "data").unwrap();
+    let create = processor(root.path());
+    let manifest = create.checksum_file_path().to_owned();
+    assert_eq!(
+        hshchk::ui::UI::new(create, true)
+            .with_stdout_summary(false)
+            .run(CancellationToken::new(), HashFileProcessType::Create),
+        HashFileProcessResult::Success
+    );
+    assert!(manifest.exists());
+    fs::write(root.path().join("file"), "tada").unwrap();
+    let verify = processor(root.path());
+    assert_eq!(
+        hshchk::ui::UI::new(verify, true)
+            .with_stdout_summary(false)
+            .run(CancellationToken::new(), HashFileProcessType::Verify),
+        HashFileProcessResult::Error
+    );
+}
+
 fn processor(root: &Path) -> HashFileProcessor {
     HashFileProcessor::try_new(HashFileProcessOptions {
         base_path: root.into(),

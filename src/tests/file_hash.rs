@@ -4,6 +4,17 @@ use sha1::Sha1;
 use tokio_util::sync::CancellationToken;
 
 #[test]
+fn zero_length_buffer_is_rejected_before_opening_input() {
+    let root = tempfile::tempdir().unwrap();
+    let missing = root.path().join("does-not-exist");
+    let error = FileHash::<Sha1>::new_with_buffer_size(&missing, 0)
+        .err()
+        .expect("zero buffer must be rejected");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+    assert!(!missing.exists());
+}
+
+#[test]
 fn same_size_changes_during_hashing_are_rejected() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("file");

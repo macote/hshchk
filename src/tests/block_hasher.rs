@@ -19,6 +19,18 @@ impl Hasher for Reader {
 impl BlockHasher for Reader {}
 
 #[test]
+fn synthetic_reader_validation_does_not_require_a_filesystem_path() {
+    let reader = Reader {
+        reads: 0,
+        fail_second_read: false,
+    };
+    assert!(reader
+        .validate_file(std::path::Path::new("synthetic-input"))
+        .is_ok());
+    assert_eq!(reader.reads, 0);
+}
+
+#[test]
 fn cancellation_stops_before_reading_the_next_block() {
     let token = CancellationToken::new();
     let mut reader = Reader {

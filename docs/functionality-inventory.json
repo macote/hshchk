@@ -338,7 +338,9 @@
       ],
       "tests": [
         "forced_progress_is_on_stderr_and_can_be_disabled",
-        "redirected_output_and_summary_use_plain_complete_lines"
+        "redirected_output_and_summary_use_plain_complete_lines",
+        "test_read_only_stdout_reports_errors_without_losing_saved_manifest",
+        "test_unwritable_progress_stream_preserves_manifest_and_returns_json_error"
       ]
     },
     {
@@ -599,6 +601,17 @@
       ],
       "tests": [
         "report_write_failure_is_captured_before_the_json_result_is_emitted"
+      ]
+    },
+    {
+      "id": "F48",
+      "behavior": "Windows directory junction cycles are rejected without manifest replacement",
+      "critical": true,
+      "platforms": [
+        "Windows"
+      ],
+      "tests": [
+        "test_directory_junctions_are_rejected_without_replacing_manifest"
       ]
     }
   ]

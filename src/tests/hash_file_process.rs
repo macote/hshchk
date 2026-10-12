@@ -1,4 +1,97 @@
 use super::*;
+
+#[test]
+fn invalid_library_targets_and_mode_options_fail_before_processing() {
+    let root = tempfile::tempdir().unwrap();
+    let file = root.path().join("file");
+    fs::write(&file, "data").unwrap();
+    assert!(HashFileProcessor::try_new(HashFileProcessOptions {
+        base_path: file,
+        ..Default::default()
+    })
+    .is_err());
+    for options in [
+        HashFileProcessOptions {
+            base_path: root.path().into(),
+            dry_run: true,
+            ..Default::default()
+        },
+        HashFileProcessOptions {
+            base_path: root.path().into(),
+            remove_missing_in_update: true,
+            ..Default::default()
+        },
+        HashFileProcessOptions {
+            base_path: root.path().into(),
+            checksum_file: Some(root.path().into()),
+            ..Default::default()
+        },
+    ] {
+        assert!(HashFileProcessor::try_new(options).is_err());
+    }
+}
+
+#[test]
+fn legacy_completion_subscription_and_relative_report_exclusion_work() {
+    let root = tempfile::tempdir().unwrap();
+    fs::write(root.path().join("file"), "data").unwrap();
+    let mut processor = HashFileProcessor::try_new(HashFileProcessOptions {
+        base_path: root.path().into(),
+        ..Default::default()
+    })
+    .unwrap();
+    let (sender, receiver) = crossbeam::channel::unbounded();
+    processor.set_complete_event_sender(sender);
+    let report = format!(
+        "{}-report.txt",
+        root.path().file_name().unwrap().to_string_lossy()
+    );
+    processor.exclude_output_file(Path::new(&report)).unwrap();
+    assert!(!Path::new(&report).exists());
+    assert_eq!(processor.process_outcome().status, ProcessStatus::Success);
+    assert_eq!(receiver.try_recv().unwrap(), HashFileProcessResult::Success);
+    assert!(receiver.try_recv().is_err());
+}
+
+#[test]
+fn disappearing_or_nonregular_worker_inputs_are_retained_as_errors() {
+    let root = tempfile::tempdir().unwrap();
+    let mut processor = HashFileProcessor::try_new(HashFileProcessOptions {
+        base_path: root.path().into(),
+        ..Default::default()
+    })
+    .unwrap();
+    let directory = processor.base_path.join("directory");
+    fs::create_dir(&directory).unwrap();
+    processor.process_file(&directory);
+    let missing = processor.base_path.join("removed-before-open");
+    processor.process_file(&missing);
+    assert_eq!(processor.stats().errors, 2);
+    assert!(processor.has_operational_errors());
+    assert!(!processor.manifest_written);
+    assert!(processor.diagnostics.iter().any(|entry| matches!(&entry.state, FileProcessState::Error(message) if message == "not a regular file")));
+}
+
+#[cfg(windows)]
+#[test]
+fn unpaired_surrogate_paths_are_rejected_before_filesystem_access() {
+    use std::os::windows::ffi::OsStringExt;
+    let root = tempfile::tempdir().unwrap();
+    let mut processor = HashFileProcessor::try_new(HashFileProcessOptions {
+        base_path: root.path().into(),
+        ..Default::default()
+    })
+    .unwrap();
+    let path = processor
+        .base_path
+        .join(std::ffi::OsString::from_wide(&[b'f' as u16, 0xd800]));
+    processor.process_file(&path);
+    assert_eq!(processor.stats().errors, 1);
+    assert!(matches!(
+        processor.diagnostics[0].state,
+        FileProcessState::InvalidUnicodeFileName
+    ));
+}
 #[test]
 fn output_flush_failure_prevents_manifest_replacement() {
     let root = tempfile::tempdir().unwrap();
