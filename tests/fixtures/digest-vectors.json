@@ -1,0 +1,44 @@
+{
+  "sources": {
+    "six_algorithms": "Python hashlib; repeating bytes i % 251",
+    "Blake3": "https://raw.githubusercontent.com/BLAKE3-team/BLAKE3/f55849f89cd85083c1c9daa2c5de20766f309c00/test_vectors/test_vectors.json"
+  },
+  "samples": [
+    {
+      "length": 0,
+      "digests": {
+        "MD5": "d41d8cd98f00b204e9800998ecf8427e",
+        "SHA1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "SHA512": "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e",
+        "Blake2b": "786a02f742015903c6c6fd852552d272912f4740e15847618a86e217f71f5419d25e1031afee585313896444934eb04b903a685b1448b755d56f701afe9be2ce",
+        "Blake2s": "69217a3079908094e11121d042354a7c1f55b6482ca1a51e1b250dfd1ed0eef9",
+        "Blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    {
+      "length": 1024,
+      "digests": {
+        "MD5": "9ee0a0e0c0bc0f1ff29d663d1fdf0743",
+        "SHA1": "0ac28084ff74933d05123496dafd3791684d9b53",
+        "SHA256": "2bce1ba628720664be4b9fdd77aae0678e5f0f3f02fc6ff641ec879094f6a404",
+        "SHA512": "9af3eed7e9dd11428bb922c6830c32065154532303781f8ea4f20792d616703884d564ebfd2bfa65faed8fc8fd91d9e1d3f12897fbb1e2247632db70ce30573e",
+        "Blake2b": "8d1090909017add40e749df2d0ebac43273d6fc816bc4ffaf2a6dfabe4206dea13677d2002399e4a38e700d8083db4af8341ee9b3a5147110b6a963a3894e4e2",
+        "Blake2s": "eefe540b091c081f91a31b4db99926352f05cc012a7a1402268923dd00a278d7",
+        "Blake3": "42214739f095a406f3fc83deb889744ac00df831c10daa55189b5d121c855af7"
+      }
+    },
+    {
+      "length": 1025,
+      "digests": {
+        "MD5": "3f3789452b88cb32b8cbfbafe715e29a",
+        "SHA1": "ca9fdc040579afc74c0e6314fee7af12bd5c4284",
+        "SHA256": "bc0b6b10b89b9487a12fda2a8cc13194e7091c217aabf8b92846274026f4bcd0",
+        "SHA512": "1f0cb287c12671e2f498170ff2762886686ceb88b7d63f944708d3060752376ff38e4a88ab7ceb0bb437083e7f1d051049b8d94356e72e4d59adcc102f585ac0",
+        "Blake2b": "7a9e5283a15d13b995755360fde4c65c2ae1bc0cf33e8db2ce8416e5d10697c73fc4b2622a29b938a1faec43d931b02e71ad8635e071265633643a9d9396ec28",
+        "Blake2s": "9b4b1bfb89177545cc59b321be5403774c58f061db927f04d206116b8278d2b4",
+        "Blake3": "d00278ae47eb27b34faecf67b4fe263f82d5412916c1ffd97c8cb7fb814b8444"
+      }
+    }
+  ]
+}

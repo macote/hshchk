@@ -200,6 +200,8 @@ cargo clippy --locked --all-targets -- -D warnings
 
 Cargo.lock is tracked for reproducible CLI builds, and CI tests the locked dependency set. BLAKE3 uses its stable native API through a local digest adapter rather than its experimental trait integration.
 
+Independent CLI workflows and the production coverage gates are described in [test and coverage policy](docs/testing.md). CI requires every test to pass and enforces at least 80% production Rust line coverage on Linux and Windows MSVC.
+
 The CLI uses HashSum by default. Library callers using `HashFileProcessOptions::default()` retain the legacy format unless they explicitly select `HashFileFormat::HashSum`.
 
 # License

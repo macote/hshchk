@@ -11,6 +11,10 @@ pub struct Speed {
     pub unit: &'static str,
 }
 
+#[cfg(test)]
+#[path = "tests/speed.rs"]
+mod tests;
+
 pub fn get_speed(current_bytes: u64, previous_bytes: u64, elapsed_millis: u128) -> Speed {
     let speed = if elapsed_millis == 0 || previous_bytes >= current_bytes {
         0_u128
