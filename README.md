@@ -205,4 +205,3 @@ The CLI uses HashSum by default. Library callers using `HashFileProcessOptions::
 # License
 
 MIT
-
