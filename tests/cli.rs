@@ -155,6 +155,7 @@ fn forced_progress_is_on_stderr_and_can_be_disabled() {
     let forced = cli(root.path(), &["--progress", "always"]);
     assert!(forced.status.success());
     assert!(forced.stderr.contains(&b'\r'));
+    assert!(String::from_utf8_lossy(&forced.stderr).contains("B/s)"));
     assert!(!forced.stdout.contains(&b'\r'));
     let disabled = cli(root.path(), &["--progress", "never"]);
     assert!(disabled.status.success());

@@ -1,10 +1,10 @@
 use std::convert::TryInto;
 
 pub static BPS: &str = "B/s";
-pub static KBPS: &str = "KB/s";
-pub static MBPS: &str = "MB/s";
-pub static GBPS: &str = "GB/s";
-pub static TBPS: &str = "TB/s";
+pub static KBPS: &str = "KiB/s";
+pub static MBPS: &str = "MiB/s";
+pub static GBPS: &str = "GiB/s";
+pub static TBPS: &str = "TiB/s";
 
 pub struct Speed {
     pub bytes_per_interval: u64,

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Restore hashing speed in live progress, keep it visible with long paths, and label binary throughput units correctly (KiB/s, MiB/s, GiB/s, TiB/s).
+
 ## 0.2.0 - 2026-10-12
 
 This release adds explicit CLI operations, reliable manifest updates, structured results,

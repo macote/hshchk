@@ -24,7 +24,7 @@ On Windows, use `python` and `target/debug/hshchk.exe`; PowerShell 7 must be on 
 
 ## Code coverage
 
-Linux and Windows MSVC CI enforce at least **80% first-party production Rust line coverage**. Existing Rust tests and the external E2E process executions contribute to the same LLVM report. Function and region coverage are reported as diagnostics; branch coverage is not a claimed metric or gate.
+Linux and Windows MSVC CI enforce at least **92% first-party production Rust line coverage**. Existing Rust tests and the external E2E process executions contribute to the same LLVM report. Function and region coverage are reported as diagnostics; branch coverage is not a claimed metric or gate.
 
 Unit-test modules live in `src/tests/` so cargo-llvm-cov's default test-directory filter excludes their lines. Test helpers and dependencies are excluded; production source, including CLI, output, progress, adapters, and error paths, stays in the denominator. Platform reports are separate because cfg-selected code differs. Neither report establishes coverage on every supported architecture. Ordinary release binaries are not instrumented and cannot supply source coverage.
 
@@ -38,7 +38,7 @@ cargo llvm-cov clean --workspace
 cargo test --locked --all-targets
 cargo build --locked
 python3 tests/e2e_cli.py --binary "$CARGO_TARGET_DIR/debug/hshchk"
-cargo llvm-cov report --json --output-path coverage/coverage.json --fail-under-lines 80
+cargo llvm-cov report --json --output-path coverage/coverage.json --fail-under-lines 92
 cargo llvm-cov report --html --output-dir coverage/html
 ```
 

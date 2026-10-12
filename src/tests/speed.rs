@@ -2,6 +2,10 @@ use super::*;
 
 #[test]
 fn throughput_handles_empty_intervals_counter_resets_and_unit_boundaries() {
+    assert_eq!(
+        [BPS, KBPS, MBPS, GBPS, TBPS],
+        ["B/s", "KiB/s", "MiB/s", "GiB/s", "TiB/s"]
+    );
     for (current, previous, elapsed) in [(10, 0, 0), (10, 10, 1), (0, 10, 1)] {
         let speed = get_speed(current, previous, elapsed);
         assert_eq!(speed.bytes_per_interval, 0);

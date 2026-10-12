@@ -102,7 +102,7 @@ Manifest saves use sorted entries and a unique temporary file in the destination
 
 The report and active manifest are excluded from hashing. A report cannot alias the manifest, including through a hard link. Reports append to existing files and an unavailable report path fails before processing begins.
 
-Live progress and diagnostics go to stderr. Final summaries go to stdout and use complete lines. Redirected output defaults to no live progress. Statistics distinguish bytes actually hashed from sizes inspected without hashing; counts on failed or canceled runs describe work performed, not committed manifest changes.
+Live progress and diagnostics go to stderr. Progress includes the current file's average hashing speed; long paths are shortened to keep progress details visible. Speeds use binary units (KiB/s, MiB/s, GiB/s). Final summaries go to stdout and use complete lines, including overall hashing throughput. Redirected output defaults to no live progress; use `--progress always` to enable it. Statistics distinguish bytes actually hashed from sizes inspected without hashing; counts on failed or canceled runs describe work performed, not committed manifest changes.
 
 The CLI excludes identifiable redirected stdout/stderr files from hashing, including output files inside the target directory. Use result paths distinct from input files and the checksum manifest: shell redirection opens/truncates its destination before the CLI starts.
 
@@ -200,7 +200,7 @@ cargo clippy --locked --all-targets -- -D warnings
 
 Cargo.lock is tracked for reproducible CLI builds, and CI tests the locked dependency set. BLAKE3 uses its stable native API through a local digest adapter rather than its experimental trait integration.
 
-Independent CLI workflows and the production coverage gates are described in [test and coverage policy](docs/testing.md). CI requires every test to pass and enforces at least 80% production Rust line coverage on Linux and Windows MSVC.
+Independent CLI workflows and the production coverage gates are described in [test and coverage policy](docs/testing.md). CI requires every test to pass and enforces at least 92% production Rust line coverage on Linux and Windows MSVC.
 
 The CLI uses HashSum by default. Library callers using `HashFileProcessOptions::default()` retain the legacy format unless they explicitly select `HashFileFormat::HashSum`.
 

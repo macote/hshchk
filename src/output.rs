@@ -14,6 +14,7 @@ pub struct Output {
     progress: bool,
     width: usize,
     last_refresh: Option<Instant>,
+    file_started: Option<Instant>,
     line_active: bool,
 }
 
@@ -36,6 +37,7 @@ impl Output {
                 .map_or(80, |(width, _)| usize::from(width.0))
                 .saturating_sub(1),
             last_refresh: None,
+            file_started: None,
             line_active: false,
         })
     }
@@ -69,6 +71,11 @@ impl Output {
         if !self.progress {
             return Ok(());
         }
+        let now = Instant::now();
+        if progress.bytes_processed == 0 && !progress.complete {
+            self.file_started = Some(now);
+        }
+        let started = *self.file_started.get_or_insert(now);
         if !progress.complete
             && self
                 .last_refresh
@@ -76,22 +83,36 @@ impl Output {
         {
             return Ok(());
         }
-        let percent = if progress.file_size == 0 {
-            100.0
-        } else {
-            progress.bytes_processed as f64 * 100.0 / progress.file_size as f64
-        };
-        let line = format!(
-            "{} ({:.0}%; {} bytes)",
-            progress.file_path, percent, progress.bytes_processed
-        );
-        let truncated: String = line.graphemes(true).take(self.width).collect();
+        let truncated = self.progress_line(progress, now.duration_since(started).as_millis());
         let padding = self.width.saturating_sub(truncated.graphemes(true).count());
         write!(io::stderr(), "\r{}{}", truncated, " ".repeat(padding))?;
         io::stderr().flush()?;
         self.last_refresh = Some(Instant::now());
         self.line_active = true;
         Ok(())
+    }
+    fn progress_line(&self, progress: &FileProgress, elapsed_ms: u128) -> String {
+        let percent = if progress.file_size == 0 {
+            100.0
+        } else {
+            progress.bytes_processed as f64 * 100.0 / progress.file_size as f64
+        };
+        let speed = get_speed(progress.bytes_processed, 0, elapsed_ms);
+        let suffix = format!(
+            " ({:.0}%; {} bytes; {} {})",
+            percent,
+            progress.bytes_processed,
+            speed.bytes_per_interval.to_formatted_string(&Locale::en),
+            speed.unit
+        );
+        let path_width = self.width.saturating_sub(suffix.graphemes(true).count());
+        let path: String = progress
+            .file_path
+            .graphemes(true)
+            .take(path_width)
+            .collect();
+        let line = format!("{}{}", path, suffix);
+        line.graphemes(true).take(self.width).collect()
     }
     pub fn write_diagnostic(&mut self, entry: &FileProcessEntry, warning: bool) -> io::Result<()> {
         self.clear_progress()?;
@@ -138,3 +159,7 @@ impl Output {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "tests/output.rs"]
+mod tests;
