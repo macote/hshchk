@@ -395,3 +395,13 @@ fn library_rejects_conflicting_mode_and_mode_specific_options() {
         .is_err());
     }
 }
+#[test]
+fn legacy_filenames_starting_with_hex_words_round_trip() {
+    let root = input();
+    fs::write(root.path().join("dead beef"), "content").unwrap();
+    success(command("create", root.path(), &["--format", "hashcheck"]));
+    success(command("verify", root.path(), &[]));
+    success(command("verify", root.path(), &["--size"]));
+    success(command("update", root.path(), &[]));
+    success(command("verify", root.path(), &[]));
+}

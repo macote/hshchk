@@ -141,8 +141,10 @@ impl HashFile {
 }
 
 fn infer_format(line: &str) -> HashFileFormat {
-    if line.split_once(' ').is_some_and(|(digest, _)| {
-        !digest.is_empty() && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+    if line.split_once(' ').is_some_and(|(digest, rest)| {
+        matches!(digest.len(), 32 | 40 | 64 | 128)
+            && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+            && (rest.starts_with('*') || rest.starts_with(' '))
     }) {
         HashFileFormat::HashSum
     } else if line.contains('|') {
