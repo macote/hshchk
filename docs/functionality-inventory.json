@@ -1,0 +1,618 @@
+{
+  "version": 1,
+  "definition": "Reviewed behavior-to-acceptance-test mapping; run checker only after suites pass. No production line coverage inferred from mapping.",
+  "requirements": [
+    {
+      "id": "F01",
+      "behavior": "All seven algorithms match independent digest vectors",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_independent_digest_vectors_for_every_algorithm_and_format"
+      ]
+    },
+    {
+      "id": "F02",
+      "behavior": "Both creation formats preserve digest and size semantics",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_independent_digest_vectors_for_every_algorithm_and_format"
+      ]
+    },
+    {
+      "id": "F03",
+      "behavior": "Explicit create/verify/update and legacy auto selection",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "explicit_commands_create_verify_update_and_keep_the_shortcut"
+      ]
+    },
+    {
+      "id": "F04",
+      "behavior": "Overwrite authorization and legacy forced creation",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "explicit_create_requires_overwrite_and_legacy_create_still_overwrites"
+      ]
+    },
+    {
+      "id": "F05",
+      "behavior": "Verify/update never silently create a missing manifest",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "verify_and_update_do_not_create_missing_manifests"
+      ]
+    },
+    {
+      "id": "F06",
+      "behavior": "Relative manifest selection uses target rather than working directory",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "explicit_relative_manifest_paths_resolve_from_target_not_cwd"
+      ]
+    },
+    {
+      "id": "F07",
+      "behavior": "External manifests keep entries relative to target",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "external_manifests_keep_entries_relative_to_target_directory"
+      ]
+    },
+    {
+      "id": "F08",
+      "behavior": "Custom names require algorithm on read; conventional names infer algorithm",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "custom_names_require_algorithm_for_reading_and_known_names_infer_it"
+      ]
+    },
+    {
+      "id": "F09",
+      "behavior": "Discovery ambiguity and algorithm filtering",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "discovery_rejects_ambiguity_and_type_restricts_candidates"
+      ]
+    },
+    {
+      "id": "F10",
+      "behavior": "Case insensitive SUM/SUMS discovery preserves filename",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "variants_of_checksum_names_are_detected_and_updated_in_place"
+      ]
+    },
+    {
+      "id": "F11",
+      "behavior": "Read format detection and update format preservation",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "selected_manifest_preserves_actual_format_even_if_filename_suggests_another"
+      ]
+    },
+    {
+      "id": "F12",
+      "behavior": "Same-size edits and unchanged updates rehash inputs",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "same_size_edits_are_rehashed_in_both_formats"
+      ]
+    },
+    {
+      "id": "F13",
+      "behavior": "Dry-run preserves manifests and exposes proposed statistics",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_edit_session_dry_run_filters_and_append_report"
+      ]
+    },
+    {
+      "id": "F14",
+      "behavior": "Filtered missing removal preserves excluded entries",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_edit_session_dry_run_filters_and_append_report"
+      ]
+    },
+    {
+      "id": "F15",
+      "behavior": "Missing entries retained until explicit removal",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "missing_entries_are_kept_until_removal_is_requested"
+      ]
+    },
+    {
+      "id": "F16",
+      "behavior": "Sorted deterministic manifests",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "manifest_entries_are_sorted"
+      ]
+    },
+    {
+      "id": "F17",
+      "behavior": "Exit codes distinguish success/mismatch/operational/empty",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "cli_exit_codes_distinguish_mismatches_and_operational_errors"
+      ]
+    },
+    {
+      "id": "F18",
+      "behavior": "Cancellation library API preserves original manifest",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "canceled_update_preserves_manifest_and_existing_tmp_file"
+      ]
+    },
+    {
+      "id": "F19",
+      "behavior": "Operational errors take precedence over mismatches",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "operational_errors_take_precedence_over_checksum_mismatches"
+      ]
+    },
+    {
+      "id": "F20",
+      "behavior": "Owned outcomes retain stats and diagnostics after processor reuse",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "warnings_do_not_fail_verification_and_outcomes_survive_processor_reuse"
+      ]
+    },
+    {
+      "id": "F21",
+      "behavior": "Legacy library defaults and explicit mode/selection contracts",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "library_explicit_modes_and_selection_preserve_the_legacy_default"
+      ]
+    },
+    {
+      "id": "F22",
+      "behavior": "Configuration validation and mode-specific CLI options",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "help_describes_each_mode_and_mode_specific_flags_are_rejected"
+      ]
+    },
+    {
+      "id": "F23",
+      "behavior": "Human reports append, preserve history, and remain separate from JSON",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_edit_session_dry_run_filters_and_append_report"
+      ]
+    },
+    {
+      "id": "F24",
+      "behavior": "Report/manifest hard-link aliases are rejected without mutation",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_output_hard_links_are_excluded_and_report_alias_is_refused"
+      ]
+    },
+    {
+      "id": "F25",
+      "behavior": "Redirected output identities and their aliases excluded from traversal",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_output_hard_links_are_excluded_and_report_alias_is_refused"
+      ]
+    },
+    {
+      "id": "F26",
+      "behavior": "Plain redirected summaries and forced/disabled progress",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "forced_progress_is_on_stderr_and_can_be_disabled",
+        "redirected_output_and_summary_use_plain_complete_lines",
+        "test_unwritable_stdout_reports_errors_without_losing_saved_manifest",
+        "test_unwritable_progress_stream_preserves_manifest_and_returns_json_error"
+      ]
+    },
+    {
+      "id": "F27",
+      "behavior": "Silent mode retains diagnostics and explicit JSON",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "silent_mode_finishes_and_still_reports_errors",
+        "successful_create_and_verify_are_one_schema_valid_record"
+      ]
+    },
+    {
+      "id": "F28",
+      "behavior": "JSON schema for successful create/verify",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "successful_create_and_verify_are_one_schema_valid_record"
+      ]
+    },
+    {
+      "id": "F29",
+      "behavior": "JSON schema for verification diagnostics and warnings",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "mismatches_missing_files_and_warnings_keep_distinct_statuses"
+      ]
+    },
+    {
+      "id": "F30",
+      "behavior": "JSON schema for setup/usage/operational/empty/cancellation outcomes",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "canceled_library_outcome_has_a_schema_valid_result",
+        "setup_errors_and_usage_errors_are_still_json",
+        "empty_and_malformed_manifest_failures_match_the_schema"
+      ]
+    },
+    {
+      "id": "F31",
+      "behavior": "Help, version, and five completion generators",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "help_version_and_completion_scripts_remain_text_auxiliary_output"
+      ]
+    },
+    {
+      "id": "F32",
+      "behavior": "Generated completions load and return actual suggestions",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_completions_load_in_a_disposable_native_shell"
+      ]
+    },
+    {
+      "id": "F33",
+      "behavior": "Reserved command names and -- delimiter disambiguation",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "directories_named_like_commands_can_use_the_compatibility_shortcut"
+      ]
+    },
+    {
+      "id": "F34",
+      "behavior": "Portable foreign manifest separators/CRLF/case and Unicode paths",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_foreign_manifests_crlf_text_markers_and_uppercase_digests"
+      ]
+    },
+    {
+      "id": "F35",
+      "behavior": "Malformed/duplicate/escaping entries preserve outside sentinels",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_manifest_path_escape_and_duplicates_preserve_sentinels"
+      ]
+    },
+    {
+      "id": "F36",
+      "behavior": "Legacy size verification reports inspected rather than hashed bytes",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "size_only_counts_inspected_bytes_without_claiming_hashing"
+      ]
+    },
+    {
+      "id": "F37",
+      "behavior": "Bounded nested binary-tree counts and independent digests",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": [
+        "test_bounded_nested_binary_tree_matches_independent_sha256"
+      ]
+    },
+    {
+      "id": "F38",
+      "behavior": "Interactive terminal sizing/truncation across terminal widths",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": []
+    },
+    {
+      "id": "F39",
+      "behavior": "Actual Zsh/Fish/Elvish interactive completion sessions",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": []
+    },
+    {
+      "id": "F40",
+      "behavior": "Cross-machine manifest transfer using real archive builds",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": []
+    },
+    {
+      "id": "F41",
+      "behavior": "Crash/concurrent-writer exploratory observations (no snapshot guarantee)",
+      "critical": false,
+      "platforms": [
+        "Linux",
+        "Darwin",
+        "Windows"
+      ],
+      "tests": []
+    },
+    {
+      "id": "F42",
+      "behavior": "Unix file links followed; broken links/cycles fail without save",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin"
+      ],
+      "tests": [
+        "test_file_symlinks_broken_links_and_directory_cycles"
+      ]
+    },
+    {
+      "id": "F43",
+      "behavior": "Unsupported Unix filenames and unwritable destinations fail without save",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin"
+      ],
+      "tests": [
+        "test_unsupported_names_and_unwritable_destination_preserve_manifest"
+      ]
+    },
+    {
+      "id": "F44",
+      "behavior": "Unix manifest replacement retains existing permissions",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin"
+      ],
+      "tests": [
+        "update_preserves_existing_manifest_permissions"
+      ]
+    },
+    {
+      "id": "F45",
+      "behavior": "Real CLI SIGINT cancellation exits 130 without save",
+      "critical": true,
+      "platforms": [
+        "Linux",
+        "Darwin"
+      ],
+      "tests": [
+        "canceled_cli_emits_json_and_exit_130"
+      ]
+    },
+    {
+      "id": "F46",
+      "behavior": "Windows sharing locks prevent failed update from saving",
+      "critical": true,
+      "platforms": [
+        "Windows"
+      ],
+      "tests": [
+        "locked_file_blocks_update_and_preserves_manifest"
+      ]
+    },
+    {
+      "id": "F47",
+      "behavior": "Linux report-output failure before save preserves manifest",
+      "critical": true,
+      "platforms": [
+        "Linux"
+      ],
+      "tests": [
+        "report_write_failure_is_captured_before_the_json_result_is_emitted"
+      ]
+    },
+    {
+      "id": "F48",
+      "behavior": "Windows directory junction cycles are rejected without manifest replacement",
+      "critical": true,
+      "platforms": [
+        "Windows"
+      ],
+      "tests": [
+        "test_directory_junctions_are_rejected_without_replacing_manifest"
+      ]
+    }
+  ]
+}

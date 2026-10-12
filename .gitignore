@@ -11,3 +11,4 @@
 # Locally generated release packages
 /dist/
 /scripts/__pycache__/
+/tests/__pycache__/

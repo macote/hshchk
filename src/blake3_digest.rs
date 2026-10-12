@@ -32,17 +32,5 @@ impl FixedOutputReset for Blake3Digest {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use digest::Digest;
-    #[test]
-    fn finalize_reset_matches_native_blake3_and_resets_state() {
-        let mut hasher = Blake3Digest::default();
-        Digest::update(&mut hasher, b"data");
-        assert_eq!(
-            &hasher.finalize_reset()[..],
-            blake3::hash(b"data").as_bytes()
-        );
-        assert_eq!(&hasher.finalize_reset()[..], blake3::hash(b"").as_bytes());
-    }
-}
+#[path = "tests/blake3_digest.rs"]
+mod tests;

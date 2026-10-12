@@ -179,7 +179,7 @@ fn json_requested(args: &[OsString]) -> bool {
 
 fn json_exit(value: &serde_json::Value, code: u8) -> ExitCode {
     if let Err(error) = report::write_json(value, io::stdout().lock()) {
-        eprintln!("Cannot write JSON output: {}", error);
+        let _ = writeln!(std::io::stderr(), "Cannot write JSON output: {}", error);
         return ExitCode::from(2);
     }
     ExitCode::from(code)
@@ -206,7 +206,7 @@ fn main() -> ExitCode {
         let mut script = Vec::new();
         generate(shell, &mut cli(), "hshchk", &mut script);
         if let Err(error) = io::stdout().lock().write_all(&script) {
-            eprintln!("Cannot write completions: {}", error);
+            let _ = writeln!(std::io::stderr(), "Cannot write completions: {}", error);
             return ExitCode::from(2);
         }
         return ExitCode::SUCCESS;
@@ -228,7 +228,7 @@ fn main() -> ExitCode {
             }
         }
         Err(error) => {
-            eprintln!("{}", error);
+            let _ = writeln!(std::io::stderr(), "{}", error);
             let mode = process_type.or_else(|| {
                 if flag(matches, "create") {
                     Some(HashFileProcessType::Create)
@@ -256,10 +256,5 @@ fn main() -> ExitCode {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn cli_argument_relationships_are_consistent() {
-        cli().debug_assert();
-    }
-}
+#[path = "tests/hshchk.rs"]
+mod tests;

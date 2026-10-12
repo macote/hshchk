@@ -7,6 +7,10 @@ use serde_json::{json, Value};
 use std::io::{self, Write};
 use std::path::Path;
 
+#[cfg(test)]
+#[path = "tests/report.rs"]
+mod tests;
+
 fn operation_name(operation: HashFileProcessType) -> &'static str {
     match operation {
         HashFileProcessType::Create => "create",

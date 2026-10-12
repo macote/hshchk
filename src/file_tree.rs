@@ -7,6 +7,10 @@ pub trait FileTreeProcessor {
     fn process_file(&mut self, file_path: &Path);
 }
 
+#[cfg(test)]
+#[path = "tests/file_tree.rs"]
+mod tests;
+
 pub struct FileTree<'a, T: FileTreeProcessor> {
     processor: &'a mut T,
 }
