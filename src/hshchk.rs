@@ -28,6 +28,7 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
                 .short('c')
                 .long("create")
                 .action(clap::ArgAction::SetTrue)
+                .conflicts_with("update")
                 .help("Force create mode and overwrite checksum file if it exists"),
         )
         .arg(
@@ -72,6 +73,41 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
                 .action(clap::ArgAction::SetTrue)
                 .help("Use hshchk (e.g. hshchk.sha1) file format"),
         )
+        .arg(
+            Arg::new("update")
+                .long("update")
+                .short('x')
+                .action(clap::ArgAction::SetTrue)
+                .help("Update an existing checksum file; rehash all selected files"),
+        )
+        .arg(
+            Arg::new("remove-missing")
+                .long("remove-missing")
+                .requires("update")
+                .action(clap::ArgAction::SetTrue)
+                .help("Remove missing entries when updating; preserve excluded entries"),
+        )
+        .arg(
+            Arg::new("dry-run")
+                .long("dry-run")
+                .requires("update")
+                .action(clap::ArgAction::SetTrue)
+                .help("Preview update counts without replacing the manifest"),
+        )
+        .arg(
+            Arg::new("report-file")
+                .long("report-file")
+                .value_parser(clap::value_parser!(PathBuf))
+                .value_name("PATH")
+                .help("Append diagnostics and a summary to a report file"),
+        )
+        .arg(
+            Arg::new("progress")
+                .long("progress")
+                .value_parser(["auto", "always", "never"])
+                .default_value("auto")
+                .help("Live progress on stderr; auto enables it only in a terminal"),
+        )
         .get_matches();
 
     let directory = matches.get_one::<String>("directory").unwrap();
@@ -94,7 +130,7 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
     })
     .expect("Failed to set Ctrl-C handler.");
 
-    let processor = HashFileProcessor::new(HashFileProcessOptions {
+    let processor = HashFileProcessor::try_new(HashFileProcessOptions {
         base_path: target_path,
         hash_file_format: Some(hash_file_format),
         hash_type: Some(hash_type),
@@ -103,10 +139,20 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
         size_only: Some(matches.get_flag("size")),
         match_pattern: matches.get_one::<String>("match").map(String::as_str),
         ignore_pattern: matches.get_one::<String>("ignore").map(String::as_str),
-    });
+        update_mode: matches.get_flag("update"),
+        remove_missing_in_update: matches.get_flag("remove-missing"),
+        dry_run: matches.get_flag("dry-run"),
+    })?;
 
     let process_type = processor.get_process_type();
-    let ui = ui::UI::new(processor, matches.get_flag("silent"));
+    let progress = match matches.get_one::<String>("progress").unwrap().as_str() {
+        "always" => Some(true),
+        "never" => Some(false),
+        _ => None,
+    };
+    let ui = ui::UI::new(processor, matches.get_flag("silent"))
+        .with_report_file(matches.get_one::<PathBuf>("report-file").cloned())
+        .with_progress(progress);
 
     match ui.run(main_cancellation_token, process_type) {
         HashFileProcessResult::Error => {

@@ -3,76 +3,66 @@ name: ci
 on:
   pull_request:
   push:
-    branches:
-    - master
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   test:
-    name: test
-    env:
-      CARGO: cargo
-      TARGET_FLAGS:
-      TARGET_DIR: ./target
-      RUST_BACKTRACE: 1
+    name: test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
-        build:
-        - stable
-        - macos
-        - win-msvc
-        - win-gnu
         include:
-        - build: stable
-          os: ubuntu-latest
-          rust: stable
-        - build: macos
-          os: macos-latest
-          rust: nightly
-        - build: win-msvc
-          os: windows-2019
-          rust: nightly
-        - build: win-gnu
-          os: windows-2019
-          rust: nightly-x86_64-gnu
+          - name: Linux
+            os: ubuntu-latest
+            toolchain: stable
+          - name: macOS
+            os: macos-latest
+            toolchain: stable
+          - name: Windows MSVC
+            os: windows-latest
+            toolchain: stable
+          - name: Windows GNU
+            os: windows-latest
+            toolchain: stable-x86_64-pc-windows-gnu
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install GNU compiler
+        id: msys2
+        if: matrix.name == 'Windows GNU'
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc
+      - name: Configure GNU compiler
+        if: matrix.name == 'Windows GNU'
+        shell: pwsh
+        run: '"${{ steps.msys2.outputs.msys2-location }}\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append'
+      - name: Install Rust
+        run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal
+      - name: Run tests
+        run: cargo +${{ matrix.toolchain }} test --locked --all-targets
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ matrix.rust }}
-        profile: minimal
-        override: true
-
-    - name: Show command used for Cargo
-      run: |
-        echo "cargo command is: ${{ env.CARGO }}"
-        echo "target flag is: ${{ env.TARGET_FLAGS }}"
-
-    - name: Build hshchk and all crates
-      run: ${{ env.CARGO }} build --verbose --all ${{ env.TARGET_FLAGS }}
-
-    - name: Run tests
-      run: ${{ env.CARGO }} test --verbose --all ${{ env.TARGET_FLAGS }}
-
-  rustfmt:
-    name: rustfmt
+  quality:
+    name: formatting and clippy
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        profile: minimal
-        components: rustfmt
-    - name: Check formatting
-      run: |
-        cargo fmt --all -- --check
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Check formatting
+        run: cargo +stable fmt --all -- --check
+      - name: Check Clippy
+        run: cargo +stable clippy --locked --all-targets -- -D warnings

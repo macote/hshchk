@@ -1,150 +1,137 @@
+use crate::hash_file_process::{
+    FileProcessEntry, FileProgress, HashFileProcessResult, HashFileProcessType, ProcessStats,
+};
+use crate::speed::get_speed;
 use num_format::{Locale, ToFormattedString};
-use std::io::{stdout, Write};
-use std::time::Instant;
-use terminal_size::terminal_size;
+use std::fs::{File, OpenOptions};
+use std::io::{self, IsTerminal, Write};
+use std::path::Path;
+use std::time::{Duration, Instant};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::hash_file_process::{FileProcessEntry, FileProgress};
-use crate::speed::get_speed;
-
-const OUTPUT_REFRESH_IN_MILLIS: u32 = 233;
-
 pub struct Output {
-    output_width: usize,
-    refresh_rate_in_millis: u32,
-    last_output_instant: Option<Instant>,
-    last_output_file_progress: FileProgress,
+    report: Option<File>,
+    quiet: bool,
+    progress: bool,
+    width: usize,
+    last_refresh: Option<Instant>,
+    line_active: bool,
 }
 
 impl Output {
-    pub fn new() -> Self {
-        let (output_width, _) = terminal_size().unwrap();
-        Output {
-            output_width: (output_width.0 - 1) as usize,
-            refresh_rate_in_millis: OUTPUT_REFRESH_IN_MILLIS,
-            last_output_instant: None,
-            last_output_file_progress: FileProgress {
-                ..Default::default()
-            },
-        }
+    pub fn new(report: Option<&Path>, quiet: bool, progress: Option<bool>) -> io::Result<Self> {
+        let report = report
+            .map(|path| OpenOptions::new().create(true).append(true).open(path))
+            .transpose()?;
+        Ok(Self {
+            report,
+            quiet,
+            progress: !quiet && progress.unwrap_or_else(|| io::stderr().is_terminal()),
+            width: terminal_size::terminal_size()
+                .map_or(80, |(width, _)| usize::from(width.0))
+                .saturating_sub(1),
+            last_refresh: None,
+            line_active: false,
+        })
     }
-    fn pad_line(&self, line: String) -> String {
-        let mut padded_line = line.clone();
-        let line_len = line.graphemes(true).count();
-        if line_len < self.output_width {
-            let gap = self.output_width - line_len;
-            let pad = " ".repeat(gap);
-            padded_line = line + &pad;
+    fn report_line(&mut self, line: &str) -> io::Result<()> {
+        if let Some(report) = &mut self.report {
+            writeln!(report, "{}", line)?;
         }
-
-        padded_line
+        Ok(())
     }
-    fn write(
-        &mut self,
-        file_path: &str,
-        file_size: u64,
-        bytes_processed: u64,
-        info: &str,
-        new_line: bool,
-        error: bool,
-    ) {
-        let now = Instant::now();
-        let ellapsed_millis = match self.last_output_instant {
-            Some(instant) => now.duration_since(instant).as_millis(),
-            _ => 0,
+    pub fn flush(&mut self) -> io::Result<()> {
+        if let Some(report) = &mut self.report {
+            report.flush()?;
+        }
+        io::stderr().flush()
+    }
+    fn clear_progress(&mut self) -> io::Result<()> {
+        if self.line_active {
+            write!(io::stderr(), "\r{}\r", " ".repeat(self.width))?;
+            io::stderr().flush()?;
+            self.line_active = false;
+        }
+        Ok(())
+    }
+    pub fn write_progress(&mut self, progress: &FileProgress) -> io::Result<()> {
+        if progress.complete {
+            self.report_line(&format!(
+                "Hashed {} ({} bytes)",
+                progress.file_path, progress.bytes_processed
+            ))?;
+        }
+        if !self.progress {
+            return Ok(());
+        }
+        if !progress.complete
+            && self
+                .last_refresh
+                .is_some_and(|last| last.elapsed() < Duration::from_millis(233))
+        {
+            return Ok(());
+        }
+        let percent = if progress.file_size == 0 {
+            100.0
+        } else {
+            progress.bytes_processed as f64 * 100.0 / progress.file_size as f64
         };
-
-        if error || new_line || ellapsed_millis > self.refresh_rate_in_millis.into() {
-            let mut info_output = String::new();
-            if error {
-                info_output = format!(" => {}", info);
-            } else if self.last_output_file_progress.file_path == file_path
-                && bytes_processed != self.last_output_file_progress.bytes_processed
-            {
-                let percent = match file_size {
-                    0 => 100,
-                    _ => bytes_processed * 100 / file_size,
-                };
-                let speed = get_speed(
-                    bytes_processed,
-                    self.last_output_file_progress.bytes_processed,
-                    ellapsed_millis,
-                );
-
-                info_output = format!(
-                    " ({}; {} %; {} {})",
-                    file_size.to_formatted_string(&Locale::en),
-                    percent.to_formatted_string(&Locale::en),
-                    speed.bytes_per_interval.to_formatted_string(&Locale::en),
-                    speed.unit
-                );
+        let line = format!(
+            "{} ({:.0}%; {} bytes)",
+            progress.file_path, percent, progress.bytes_processed
+        );
+        let truncated: String = line.graphemes(true).take(self.width).collect();
+        let padding = self.width.saturating_sub(truncated.graphemes(true).count());
+        write!(io::stderr(), "\r{}{}", truncated, " ".repeat(padding))?;
+        io::stderr().flush()?;
+        self.last_refresh = Some(Instant::now());
+        self.line_active = true;
+        Ok(())
+    }
+    pub fn write_diagnostic(&mut self, entry: &FileProcessEntry, warning: bool) -> io::Result<()> {
+        self.clear_progress()?;
+        let line = format!(
+            "{}: {}: {:?}",
+            if warning { "warning" } else { "error" },
+            entry.file_path.display(),
+            entry.state
+        );
+        writeln!(io::stderr(), "{}", line)?;
+        self.report_line(&line)
+    }
+    pub fn write_result(
+        &mut self,
+        mode: HashFileProcessType,
+        result: HashFileProcessResult,
+        stats: &ProcessStats,
+        dry_run: bool,
+    ) -> io::Result<()> {
+        self.clear_progress()?;
+        let speed = if stats.elapsed_ms == 0 {
+            "N/A".to_string()
+        } else {
+            let speed = get_speed(stats.bytes_hashed, 0, stats.elapsed_ms);
+            format!(
+                "{} {}",
+                speed.bytes_per_interval.to_formatted_string(&Locale::en),
+                speed.unit
+            )
+        };
+        let lines = [
+            format!("{:?}{}: {:?}", mode, if dry_run { " (dry run; manifest unchanged)" } else { "" }, result),
+            format!("Files: {}; hashed: {} bytes; size checked: {} bytes", stats.files_processed.to_formatted_string(&Locale::en), stats.bytes_hashed.to_formatted_string(&Locale::en), stats.bytes_size_checked.to_formatted_string(&Locale::en)),
+            format!("Added: {}; updated: {}; unchanged: {}; removed: {}; missing: {}; extra: {}; errors: {}", stats.files_added, stats.files_updated, stats.files_unchanged, stats.files_removed, stats.missing_files, stats.extra_files, stats.errors),
+            format!("Elapsed: {:.3}s; hashing throughput: {}", stats.elapsed_ms as f64 / 1000.0, speed),
+        ];
+        for line in lines {
+            self.report_line(&line)?;
+            if !self.quiet {
+                writeln!(io::stdout(), "{}", line)?;
             }
-
-            let file_path_max_size = self.output_width - info_output.len();
-            let mut file_path_graphemes = file_path.graphemes(true);
-            let file_path_len = file_path_graphemes.clone().count();
-            let printed_file_path = if file_path_max_size < file_path_len {
-                let offset = file_path_len - file_path_max_size + "..".len();
-                for _ in 0..offset {
-                    file_path_graphemes.next();
-                }
-
-                format!("{}{}", "..", file_path_graphemes.as_str())
-            } else {
-                file_path.to_owned()
-            };
-
-            let line_output = self.pad_line(format!("{}{}", printed_file_path, info_output));
-            if error {
-                eprintln!(" {}\r", line_output);
-            } else if new_line {
-                println!(" {}\r", line_output);
-            } else {
-                print!(" {}\r", line_output);
-            }
-
-            stdout().flush().unwrap();
-            self.last_output_instant = Some(Instant::now());
-            self.last_output_file_progress = FileProgress {
-                file_path: file_path.into(),
-                file_size,
-                bytes_processed,
-            };
         }
-    }
-    pub fn write_init(&mut self) {
-        print!(" Opening files...\r");
-        stdout().flush().unwrap();
-        self.last_output_instant = Some(Instant::now());
-    }
-    pub fn write_error(&mut self, file_process_entry: &FileProcessEntry) {
-        self.write(
-            file_process_entry.file_path.to_str().unwrap(),
-            0,
-            0,
-            &format!("{:?}", file_process_entry.state),
-            true,
-            true,
-        );
-    }
-    pub fn write_progress(&mut self, file_progress: &FileProgress) {
-        self.write(
-            &file_progress.file_path,
-            file_progress.file_size,
-            file_progress.bytes_processed,
-            &file_progress.file_size.to_formatted_string(&Locale::en),
-            false,
-            false,
-        );
-    }
-    pub fn write_processed(&mut self, file_path: &str) {
-        self.write(file_path, 0, 0, "", false, false);
-    }
-    pub fn write_result(&self, result: String) {
-        println!("{}\r", self.pad_line(result));
-    }
-    pub fn clear_line(&self) {
-        print!("{}\r", self.pad_line("".into()));
-        stdout().flush().unwrap();
+        if let Some(report) = &mut self.report {
+            report.flush()?;
+        }
+        Ok(())
     }
 }

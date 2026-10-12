@@ -28,6 +28,8 @@ sha2 = "0.10"
 strum = "0.27"
 strum_macros = "0.27"
 terminal_size = "0.4"
+tempfile = "3"
+same-file = "1"
 tokio = "1"
 tokio-util = "0.7"
 unicode-segmentation = "1"
@@ -38,7 +40,6 @@ features = ["cargo", "suggestions", "wrap_help"]
 
 [dependencies.blake3]
 version = "1.8"
-features = ["traits-preview"]
 
 [dev-dependencies]
 test_shared = { path = "test_shared" }
