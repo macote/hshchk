@@ -15,12 +15,14 @@ Implemented:
 - tracked dependency lockfile and stable BLAKE3 adapter for reproducible fresh builds
 
 ## PR 2 - Structured results and exit codes
+Implemented:
 - one operation outcome containing status, statistics, and retained diagnostics
 - library callers can inspect failed and canceled operations without reading channels
 - distinguish verification mismatches from operational errors
 - document success, mismatch, usage/operational error, and cancellation exit codes
 - retain compatibility wrappers where useful
 - test the public library result and CLI exit-code contracts
+- README exit-code table, library examples, and compatibility/migration guidance
 
 ## PR 3 - Explicit CLI operations and manifest selection
 - explicit create, verify, and update subcommands; retain the directory shortcut

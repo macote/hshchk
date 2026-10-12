@@ -1,12 +1,13 @@
 use clap::{command, Arg};
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::path::PathBuf;
+use std::process::ExitCode;
 use tokio_util::sync::CancellationToken;
 
-use hshchk::hash_file_process::{HashFileProcessOptions, HashFileProcessResult, HashFileProcessor};
+use hshchk::hash_file_process::{HashFileProcessOptions, HashFileProcessor, ProcessOutcome};
 use hshchk::{get_hash_types, ui};
 
-fn run() -> Result<(), Box<dyn ::std::error::Error>> {
+fn run() -> Result<ProcessOutcome, Box<dyn ::std::error::Error>> {
     let matches = command!()
         .arg(Arg::new("directory").required(true).help(
             "Target directory. \
@@ -108,7 +109,7 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
                 .default_value("auto")
                 .help("Live progress on stderr; auto enables it only in a terminal"),
         )
-        .get_matches();
+        .try_get_matches()?;
 
     let directory = matches.get_one::<String>("directory").unwrap();
     let target_path = PathBuf::from(&directory);
@@ -127,8 +128,7 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
 
     ctrlc::set_handler(move || {
         cancellation_token.cancel();
-    })
-    .expect("Failed to set Ctrl-C handler.");
+    })?;
 
     let processor = HashFileProcessor::try_new(HashFileProcessOptions {
         base_path: target_path,
@@ -144,7 +144,6 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
         dry_run: matches.get_flag("dry-run"),
     })?;
 
-    let process_type = processor.get_process_type();
     let progress = match matches.get_one::<String>("progress").unwrap().as_str() {
         "always" => Some(true),
         "never" => Some(false),
@@ -154,38 +153,20 @@ fn run() -> Result<(), Box<dyn ::std::error::Error>> {
         .with_report_file(matches.get_one::<PathBuf>("report-file").cloned())
         .with_progress(progress);
 
-    match ui.run(main_cancellation_token, process_type) {
-        HashFileProcessResult::Error => {
-            Err(Box::new(Error::other("The hash check process failed.")))
-        }
-        HashFileProcessResult::Canceled => Err(Box::new(Error::new(
-            ErrorKind::Interrupted,
-            "The hash check process was canceled.",
-        ))),
-        HashFileProcessResult::NoFilesProcessed => Err(Box::new(Error::new(
-            ErrorKind::NotFound,
-            "No files were processed.",
-        ))),
-        HashFileProcessResult::Success => Ok(()),
-    }
+    Ok(ui.run_outcome(main_cancellation_token))
 }
 
-fn main() {
-    if let Err(error) = run() {
-        if let Some(clap_error) = error.downcast_ref::<clap::Error>() {
-            eprint!("{}", clap_error); // `clap` errors already have newlines
-
-            match clap_error.kind() {
-                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion => {
-                    // The exit code should not indicate an error for --help / --version
-                    std::process::exit(0)
-                }
-                _ => (),
+fn main() -> ExitCode {
+    match run() {
+        Ok(outcome) => ExitCode::from(outcome.status.exit_code()),
+        Err(error) => {
+            if let Some(clap_error) = error.downcast_ref::<clap::Error>() {
+                let _ = clap_error.print();
+                ExitCode::from(clap_error.exit_code() as u8)
+            } else {
+                eprintln!("{}", error);
+                ExitCode::from(2)
             }
-        } else {
-            eprintln!("{}", error);
         }
-
-        std::process::exit(1);
     }
 }

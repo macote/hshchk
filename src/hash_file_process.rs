@@ -28,6 +28,93 @@ pub enum HashFileProcessResult {
     Canceled,
 }
 
+/// Stable operation categories shared by library callers and CLI exit codes.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ProcessStatus {
+    Success,
+    VerificationFailed,
+    Error,
+    NoFilesProcessed,
+    Canceled,
+}
+
+impl ProcessStatus {
+    /// 0: success, 1: checksum mismatch/missing file, 2: operational failure, 130: cancellation.
+    pub fn exit_code(self) -> u8 {
+        match self {
+            Self::Success => 0,
+            Self::VerificationFailed => 1,
+            Self::Error | Self::NoFilesProcessed => 2,
+            Self::Canceled => 130,
+        }
+    }
+
+    /// Preserve the original status-only API, which combines both failure categories.
+    pub fn legacy_result(self) -> HashFileProcessResult {
+        match self {
+            Self::Success => HashFileProcessResult::Success,
+            Self::VerificationFailed | Self::Error => HashFileProcessResult::Error,
+            Self::NoFilesProcessed => HashFileProcessResult::NoFilesProcessed,
+            Self::Canceled => HashFileProcessResult::Canceled,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum DiagnosticLevel {
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcessDiagnostic {
+    pub level: DiagnosticLevel,
+    pub file_path: PathBuf,
+    pub state: FileProcessState,
+}
+
+/// An owned snapshot of one run; later runs do not change its statistics or diagnostics.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcessOutcome {
+    pub process_type: HashFileProcessType,
+    pub status: ProcessStatus,
+    pub stats: ProcessStats,
+    pub diagnostics: Vec<ProcessDiagnostic>,
+    pub dry_run: bool,
+    /// True once replacement succeeded, even if writing the final summary then failed.
+    pub manifest_written: bool,
+}
+
+impl ProcessOutcome {
+    pub(crate) fn setup_error(
+        process_type: HashFileProcessType,
+        dry_run: bool,
+        path: PathBuf,
+        message: String,
+    ) -> Self {
+        let mut outcome = Self {
+            process_type,
+            status: ProcessStatus::Error,
+            stats: ProcessStats::default(),
+            diagnostics: Vec::new(),
+            dry_run,
+            manifest_written: false,
+        };
+        outcome.record_output_error(path, message);
+        outcome
+    }
+
+    pub(crate) fn record_output_error(&mut self, path: PathBuf, message: String) {
+        self.status = ProcessStatus::Error;
+        self.stats.errors += 1;
+        self.diagnostics.push(ProcessDiagnostic {
+            level: DiagnosticLevel::Error,
+            file_path: path,
+            state: FileProcessState::Error(message),
+        });
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct ProcessStats {
     pub files_processed: u64,
@@ -94,6 +181,8 @@ pub struct HashFileProcessor {
     match_regex: Option<Regex>,
     ignore_regex: Option<Regex>,
     error_occurred: bool,
+    diagnostics: Vec<ProcessDiagnostic>,
+    manifest_written: bool,
     process_stats: ProcessStats,
     remove_missing_in_update: bool,
     dry_run: bool,
@@ -192,6 +281,8 @@ impl HashFileProcessor {
             match_regex: compile(options.match_pattern)?,
             ignore_regex: compile(options.ignore_pattern)?,
             error_occurred: false,
+            diagnostics: Vec::new(),
+            manifest_written: false,
             process_stats: ProcessStats::default(),
             remove_missing_in_update: options.remove_missing_in_update,
             dry_run: options.dry_run,
@@ -276,14 +367,46 @@ impl HashFileProcessor {
         self.complete_event = Some(sender);
     }
     pub fn process(&mut self) -> HashFileProcessResult {
-        self.process_with_cancellation_token(CancellationToken::new())
+        self.process_outcome().status.legacy_result()
     }
     pub fn process_with_cancellation_token(
         &mut self,
         token: CancellationToken,
     ) -> HashFileProcessResult {
+        self.process_outcome_with_cancellation_token(token)
+            .status
+            .legacy_result()
+    }
+
+    /// Process files and return an owned result, including diagnostics without event subscriptions.
+    ///
+    /// ```no_run
+    /// use hshchk::hash_file_process::{HashFileProcessOptions, HashFileProcessor, ProcessStatus};
+    /// let mut processor = HashFileProcessor::try_new(HashFileProcessOptions {
+    ///     base_path: "files".into(),
+    ///     ..Default::default()
+    /// })?;
+    /// let outcome = processor.process_outcome();
+    /// if outcome.status == ProcessStatus::VerificationFailed {
+    ///     for diagnostic in &outcome.diagnostics {
+    ///         eprintln!("{}: {:?}", diagnostic.file_path.display(), diagnostic.state);
+    ///     }
+    /// }
+    /// println!("Hashed {} bytes", outcome.stats.bytes_hashed);
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
+    pub fn process_outcome(&mut self) -> ProcessOutcome {
+        self.process_outcome_with_cancellation_token(CancellationToken::new())
+    }
+
+    pub fn process_outcome_with_cancellation_token(
+        &mut self,
+        token: CancellationToken,
+    ) -> ProcessOutcome {
         self.process_stats = ProcessStats::default();
         self.error_occurred = false;
+        self.diagnostics.clear();
+        self.manifest_written = false;
         self.seen_paths.clear();
         self.hash_file = HashFile::new();
         let started = Instant::now();
@@ -292,7 +415,39 @@ impl HashFileProcessor {
         if let Some(sender) = &self.complete_event {
             let _ = sender.send(result);
         }
-        result
+        let status = match result {
+            HashFileProcessResult::Success => ProcessStatus::Success,
+            HashFileProcessResult::NoFilesProcessed => ProcessStatus::NoFilesProcessed,
+            HashFileProcessResult::Canceled => ProcessStatus::Canceled,
+            HashFileProcessResult::Error
+                if self.process_type == HashFileProcessType::Verify
+                    && !self.has_operational_errors() =>
+            {
+                ProcessStatus::VerificationFailed
+            }
+            HashFileProcessResult::Error => ProcessStatus::Error,
+        };
+        self.diagnostics
+            .sort_by(|left, right| left.file_path.cmp(&right.file_path));
+        ProcessOutcome {
+            process_type: self.process_type,
+            status,
+            stats: self.process_stats.clone(),
+            diagnostics: self.diagnostics.clone(),
+            dry_run: self.dry_run,
+            manifest_written: self.manifest_written,
+        }
+    }
+    fn has_operational_errors(&self) -> bool {
+        self.diagnostics.iter().any(|diagnostic| {
+            diagnostic.level == DiagnosticLevel::Error
+                && !matches!(
+                    diagnostic.state,
+                    FileProcessState::Missing
+                        | FileProcessState::IncorrectSize
+                        | FileProcessState::IncorrectHash
+                )
+        })
     }
     fn selected(&self, path: &str) -> bool {
         let path = path.replace('\\', "/");
@@ -318,6 +473,11 @@ impl HashFileProcessor {
         if state == FileProcessState::Missing {
             self.process_stats.missing_files += 1;
         }
+        self.diagnostics.push(ProcessDiagnostic {
+            level: DiagnosticLevel::Error,
+            file_path: path.to_path_buf(),
+            state: state.clone(),
+        });
         if let Some(sender) = &self.error_event {
             let _ = sender.send(FileProcessEntry {
                 file_path: path.to_path_buf(),
@@ -332,6 +492,11 @@ impl HashFileProcessor {
         if state == FileProcessState::Missing {
             self.process_stats.missing_files += 1;
         }
+        self.diagnostics.push(ProcessDiagnostic {
+            level: DiagnosticLevel::Warning,
+            file_path: path.to_path_buf(),
+            state: state.clone(),
+        });
         if let Some(sender) = &self.warning_event {
             let _ = sender.send(FileProcessEntry {
                 file_path: path.to_path_buf(),
@@ -381,7 +546,7 @@ impl HashFileProcessor {
             return HashFileProcessResult::Canceled;
         }
         // An incomplete scan cannot authorize removing entries or replacing a manifest.
-        if self.error_occurred {
+        if self.has_operational_errors() {
             return HashFileProcessResult::Error;
         }
         if self.process_type != HashFileProcessType::Create {
@@ -440,6 +605,7 @@ impl HashFileProcessor {
                 );
                 return HashFileProcessResult::Error;
             }
+            self.manifest_written = true;
         }
         HashFileProcessResult::Success
     }
@@ -652,8 +818,33 @@ mod tests {
             ..Default::default()
         });
         update.set_before_save(|| Err(io::Error::other("report write failed")));
-        assert_eq!(update.process(), HashFileProcessResult::Error);
+        let outcome = update.process_outcome();
+        assert_eq!(outcome.status, ProcessStatus::Error);
+        assert!(!outcome.manifest_written);
+        assert_eq!(outcome.diagnostics.len(), 1);
         assert_eq!(fs::read(&manifest).unwrap(), original);
         assert_eq!(update.stats().errors, 1);
+    }
+
+    #[test]
+    fn cancellation_before_save_retains_completed_statistics() {
+        let root = tempfile::tempdir().unwrap();
+        fs::write(root.path().join("file"), "data").unwrap();
+        let token = CancellationToken::new();
+        let cancel = token.clone();
+        let mut processor = HashFileProcessor::new(HashFileProcessOptions {
+            base_path: root.path().into(),
+            ..Default::default()
+        });
+        processor.set_before_save(move || {
+            cancel.cancel();
+            Ok(())
+        });
+        let outcome = processor.process_outcome_with_cancellation_token(token);
+        assert_eq!(outcome.status, ProcessStatus::Canceled);
+        assert_eq!(outcome.stats.bytes_hashed, 4);
+        assert_eq!(outcome.stats.files_processed, 1);
+        assert!(!outcome.manifest_written);
+        assert!(!root.path().join("hshchk.sha1").exists());
     }
 }

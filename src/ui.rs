@@ -1,4 +1,6 @@
-use crate::hash_file_process::{HashFileProcessResult, HashFileProcessType, HashFileProcessor};
+use crate::hash_file_process::{
+    HashFileProcessResult, HashFileProcessType, HashFileProcessor, ProcessOutcome,
+};
 use crate::output::Output;
 use crossbeam::channel::{never, select, unbounded};
 use std::path::PathBuf;
@@ -30,22 +32,38 @@ impl UI {
     }
 
     pub fn run(
-        mut self,
+        self,
         token: CancellationToken,
-        mode: HashFileProcessType,
+        _mode: HashFileProcessType,
     ) -> HashFileProcessResult {
+        self.run_outcome(token).status.legacy_result()
+    }
+
+    pub fn run_outcome(mut self, token: CancellationToken) -> ProcessOutcome {
+        let mode = self.processor.get_process_type();
+        let dry_run = self.processor.is_dry_run();
         // Validate before opening: the report must never append to the manifest.
         if let Some(path) = &self.report_file {
             if let Err(error) = self.processor.exclude_output_file(path) {
                 eprintln!("Cannot use report '{}': {}", path.display(), error);
-                return HashFileProcessResult::Error;
+                return ProcessOutcome::setup_error(
+                    mode,
+                    dry_run,
+                    path.clone(),
+                    format!("cannot use report: {}", error),
+                );
             }
         }
         let output = match Output::new(self.report_file.as_deref(), self.silent, self.progress) {
             Ok(output) => output,
             Err(error) => {
                 eprintln!("Cannot open report: {}", error);
-                return HashFileProcessResult::Error;
+                return ProcessOutcome::setup_error(
+                    mode,
+                    dry_run,
+                    self.report_file.clone().unwrap_or_default(),
+                    format!("cannot open output: {}", error),
+                );
             }
         };
         let (errors, mut error_receiver) = unbounded();
@@ -100,26 +118,35 @@ impl UI {
             }
             Ok(output)
         });
-        let result = self.processor.process_with_cancellation_token(token);
-        let stats = self.processor.stats().clone();
-        let dry_run = self.processor.is_dry_run();
+        let mut outcome = self
+            .processor
+            .process_outcome_with_cancellation_token(token);
         drop(self.processor);
         match renderer.join() {
             Ok(Ok(mut output)) => {
-                if let Err(error) = output.write_result(mode, result, &stats, dry_run) {
+                if let Err(error) = output.write_result(&outcome) {
                     eprintln!("Cannot write output: {}", error);
-                    return HashFileProcessResult::Error;
+                    outcome.record_output_error(
+                        self.report_file.clone().unwrap_or_default(),
+                        format!("cannot write final output: {}", error),
+                    );
                 }
             }
             Ok(Err(error)) => {
                 eprintln!("Cannot write output: {}", error);
-                return HashFileProcessResult::Error;
+                outcome.record_output_error(
+                    self.report_file.clone().unwrap_or_default(),
+                    format!("cannot write output: {}", error),
+                );
             }
             Err(_) => {
                 eprintln!("Output worker failed");
-                return HashFileProcessResult::Error;
+                outcome.record_output_error(
+                    self.report_file.clone().unwrap_or_default(),
+                    "output worker failed".into(),
+                );
             }
         }
-        result
+        outcome
     }
 }

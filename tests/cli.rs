@@ -201,3 +201,103 @@ fn every_supported_algorithm_creates_verifies_and_detects_edits() {
         );
     }
 }
+#[test]
+fn cli_exit_codes_distinguish_mismatches_and_operational_errors() {
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("file"), "data").unwrap();
+    assert_eq!(cli(root.path(), &["--silent"]).status.code(), Some(0));
+    fs::write(root.path().join("file"), "tada").unwrap();
+    assert_eq!(cli(root.path(), &["--silent"]).status.code(), Some(1));
+    fs::remove_file(root.path().join("file")).unwrap();
+    assert_eq!(cli(root.path(), &["--silent"]).status.code(), Some(1));
+    fs::write(root.path().join("SHA1SUMS"), "malformed ").unwrap();
+    assert_eq!(cli(root.path(), &["--silent"]).status.code(), Some(2));
+}
+
+#[test]
+fn usage_errors_empty_runs_and_invalid_paths_exit_two() {
+    let root = TempDir::new().unwrap();
+    assert_eq!(cli(root.path(), &["--silent"]).status.code(), Some(2));
+    assert_eq!(cli(root.path(), &["--match", "["]).status.code(), Some(2));
+    assert_eq!(
+        cli(root.path(), &["--create", "--update"]).status.code(),
+        Some(2)
+    );
+    assert_eq!(
+        cli(&root.path().join("nonexistent"), &[]).status.code(),
+        Some(2)
+    );
+    assert_eq!(
+        cli(
+            root.path(),
+            &["--report-file", root.path().to_str().unwrap()]
+        )
+        .status
+        .code(),
+        Some(2)
+    );
+}
+
+#[test]
+fn help_and_version_exit_zero_without_a_directory() {
+    for arg in ["--help", "--version"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_hshchk"))
+            .arg(arg)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(0));
+        assert!(output.stderr.is_empty());
+        assert!(!output.stdout.is_empty());
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn stdout_failure_is_operational_even_after_manifest_was_saved() {
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("file"), "data").unwrap();
+    let full = fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_hshchk"))
+        .arg(root.path())
+        .stdout(full)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(root.path().join("SHA1SUMS").exists());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Cannot write output"));
+}
+
+#[cfg(unix)]
+#[test]
+fn ctrl_c_exits_130_and_does_not_save_a_partial_manifest() {
+    use std::io::Read;
+    use std::process::Stdio;
+    let root = TempDir::new().unwrap();
+    let file = fs::File::create(root.path().join("file")).unwrap();
+    file.set_len(512 * 1024 * 1024).unwrap();
+    drop(file);
+    let mut child = Command::new(env!("CARGO_BIN_EXE_hshchk"))
+        .arg(root.path())
+        .args(["--progress", "always"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stderr = child.stderr.take().unwrap();
+    let mut observed = Vec::new();
+    let mut byte = [0];
+    while !observed.ends_with(b"file") {
+        if stderr.read(&mut byte).unwrap() == 0 {
+            panic!("CLI stopped before hashing began");
+        }
+        observed.push(byte[0]);
+    }
+    // The first progress message is sent only after the signal handler is installed.
+    assert_eq!(unsafe { libc::kill(child.id() as i32, libc::SIGINT) }, 0);
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(130));
+    assert!(!root.path().join("SHA1SUMS").exists());
+}
